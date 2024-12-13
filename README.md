@@ -7,35 +7,39 @@ The **URL Shortener Application** is a robust, secure, and scalable system desig
 
 ## **Table of Contents**
 
-1. [Introduction](#1-introduction)  
-2. [Architecture Overview](#2-architecture-overview)  
-3. [Design Patterns](#3-design-patterns)  
-4. [Code Implementation](#4-code-implementation)  
-   - [4.1 Dependencies (`pom.xml`)](#41-dependencies-pomxml)  
-   - [4.2 Configuration Properties (`application.yml`)](#42-configuration-properties-applicationyml)  
-   - [4.3 Secrets Management (`SecretsService.java`)](#43-secrets-management-secretsservicejava)  
-   - [4.4 URL Shortener Service (`UrlShortenerService.java`)](#44-url-shortener-service-urlshortenerservicejava)  
-   - [4.5 Redis Configuration (`RedisConfig.java`)](#45-redis-configuration-redisconfigjava)  
-   - [4.6 Controller Class (`UrlShortenerController.java`)](#46-controller-class-urlshortenercontrollerjava)  
-5. [Infrastructure as Code (Terraform)](#5-infrastructure-as-code-terraform)  
-   - [5.1 Terraform Folder Structure](#51-terraform-folder-structure)  
-   - [5.2 VPC Configuration + Endpoints](#52-vpc-configuration--endpoints)  
-   - [5.3 Network Configuration](#53-network-configuration)  
-   - [5.4 SSL Certificates with ACM](#54-ssl-certificates-with-acm)  
-   - [5.5 Application Load Balancer (ALB)](#55-application-load-balancer-alb)  
-   - [5.6 Domain Configuration](#56-domain-configuration)  
-   - [5.7 AWS WAF Configuration](#57-aws-waf-configuration)  
-   - [5.8 API Gateway](#58-api-gateway)  
-   - [5.9 AWS Lambda Function](#59-aws-lambda-function)  
-   - [5.10 DynamoDB Table](#510-dynamodb-table)  
-   - [5.11 Redis (ElastiCache)](#511-redis-elasticache)  
-   - [5.12 AWS Secrets Manager](#512-aws-secrets-manager)  
-   - [5.13 AWS CloudFront Configuration](#513-aws-cloudfront-configuration)  
-6. [CI/CD Pipeline](#6-cicd-pipeline)  
-7. [Steps to Run the Project](#7-steps-to-run-the-project)  
-8. [Roadmap](#8-roadmap)  
-9. [Architecture Diagrams](#9-architecture-diagrams)  
-10. [Conclusion](#10-conclusion)  
+## Table of Contents
+
+1. [Introduction](#1-introduction)
+2. [Architecture Overview](#2-architecture-overview)
+3. [Design Patterns](#3-design-patterns)
+4. [Code Implementation](#4-code-implementation)
+   - [4.1 Dependencies (`pom.xml`)](#41-dependencies-pomxml)
+   - [4.2 Configuration Properties (`application.yml`)](#42-configuration-properties-applicationyml)
+   - [4.3 Secrets Management (`SecretsService.java`)](#43-secrets-management-secretsservicejava)
+   - [4.4 URL Shortener Service (`UrlShortenerService.java`)](#44-url-shortener-service-urlshortenerservicejava)
+   - [4.5 Redis Configuration (`RedisConfig.java`)](#45-redis-configuration-redisconfigjava)
+   - [4.6 Controller Class (`UrlShortenerController.java`)](#46-controller-class-urlshortenercontrollerjava)
+   - [4.7 OAuth2 Configuration (`SecurityConfig.java`)](#47-oauth2-configuration-securityconfigjava)
+   - [4.8 OpenAPI Specification (Swagger)](#48-openapi-specification-swagger)
+5. [Infrastructure as Code (Terraform)](#5-infrastructure-as-code-terraform)
+   - [5.1 Terraform Folder Structure](#51-terraform-folder-structure)
+   - [5.2 VPC Configuration + Endpoints](#52-vpc-configuration--endpoints)
+   - [5.3 Network Configuration](#53-network-configuration)
+   - [5.4 SSL Certificates with ACM](#54-ssl-certificates-with-acm)
+   - [5.5 Application Load Balancer (ALB)](#55-application-load-balancer-alb)
+   - [5.6 Domain Configuration](#56-domain-configuration)
+   - [5.7 AWS WAF Configuration](#57-aws-waf-configuration)
+   - [5.8 API Gateway](#58-api-gateway)
+   - [5.9 AWS Lambda Function](#59-aws-lambda-function)
+   - [5.10 DynamoDB Table](#510-dynamodb-table)
+   - [5.11 Redis (ElastiCache)](#511-redis-elasticache)
+   - [5.12 AWS Secrets Manager](#512-aws-secrets-manager)
+   - [5.13 AWS CloudFront Configuration](#513-aws-cloudfront-configuration)
+6. [CI/CD Pipeline (GitHub Actions)](#6-cicd-pipeline-github-actions)
+7. [Steps to Run the Project](#7-steps-to-run-the-project)
+8. [Roadmap](#8-roadmap)
+9. [Architecture Diagrams](#9-architecture-diagrams)
+10. [Conclusion](#10-conclusion)
 
 ---
 <br>
@@ -310,55 +314,66 @@ Below is the content of `pom.xml` with the necessary dependencies:
 
 ### 4.2 Configuration Properties (`application.yml`)
 
-The **`application.yml`** file centralizes all application configurations, ensuring clean and maintainable code.
-
 ````yaml
 app:
-  base-url: https://enok.tech/shortener
+  base-url: https://shortener.enok.tech
 
 aws:
+  region: us-east-1
   dynamodb:
     table-name: URLMappings
   secrets:
-    name: shortener/secrets
-  region: us-east-1
+    name: shortener/url-secrets
 
 spring:
   redis:
-    host: ${REDIS_HOST:redis.shortener-enok.tech}
-    port: ${REDIS_PORT:6379}
+    host: redis.shortener-enok.tech
+    port: 6379
     timeout: 2000ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
 ````
 
----
+**Explanation**:  
 
-#### Explanation:
+- **`app.base-url`**:  
+   - The base URL for generating shortened links. Updated to the custom subdomain `https://shortener.enok.tech`.
 
-1. **`app.base-url`**:  
-   - Defines the base URL for the application endpoints.  
-   - This ensures all URL generation within the application uses a consistent base (`https://enok.tech/shortener`).
+- **`aws.region`**:  
+   - Specifies the AWS region where resources will be deployed (`us-east-1`).
 
-2. **`aws.dynamodb.table-name`**:  
-   - Specifies the DynamoDB table used for storing the URL mappings.
+- **`aws.dynamodb.table-name`**:  
+   - DynamoDB table used for storing the URL mappings.
 
-3. **`aws.secrets.name`**:  
-   - Path to the AWS Secrets Manager secret (`shortener/secrets`) where sensitive credentials like Redis host, port, and DynamoDB table name are stored.
+- **`aws.secrets.name`**:  
+   - Reference to AWS Secrets Manager where credentials (e.g., database) are securely stored.
 
-4. **`aws.region`**:  
-   - Defines the AWS region where resources like DynamoDB, ElastiCache, and Secrets Manager are provisioned.
+- **`spring.redis.host`**:  
+   - Custom Redis endpoint `redis.shortener-enok.tech`. This domain will be mapped to the Redis ElastiCache endpoint using **Route 53**.
 
-5. **`spring.redis.host`**:  
-   - Custom DNS endpoint `redis.shortener-enok.tech` created in GoDaddy as a CNAME record pointing to the AWS ElastiCache Redis endpoint.
+- **`management.endpoints.web.exposure.include`**:  
+   - Exposes the `/actuator/health` endpoint for health checks, which can be used by AWS services like ALB or monitoring tools.
 
-6. **`spring.redis.port`**:  
-   - The Redis port, defaulting to `6379`.
+**Benefits**:  
 
-7. **`spring.redis.timeout`**:  
-   - Timeout configuration for Redis operations, set to `2000ms` (2 seconds) for responsiveness.
+1. **Centralized Configuration**:  
+   - All critical settings, including base URLs, AWS resources, and Redis, are managed in one place.
 
----
+2. **Custom Redis Endpoint**:  
+   - Using `redis.shortener-enok.tech` makes the Redis endpoint cleaner and easier to reference.
 
-The **`application.yml`** structure ensures that environment-specific configurations, such as Redis host, AWS resource names, and API base URLs, are organized and easily maintainable.
+3. **Secure URLs**:  
+   - Base URLs are configured to use **HTTPS** for secure access.
+
+4. **Health Monitoring**:  
+   - The exposed health endpoint enables better observability and integration with monitoring tools or load balancers.
+
+5. **Readability and Maintainability**:  
+   - Clean separation of responsibilities in the `application.yml` ensures easy updates and troubleshooting.
 
 ---
 
@@ -613,49 +628,48 @@ public class RedisConfig {
 By leveraging **Spring Data Redis** and AWS ElastiCache with a custom DNS endpoint, the application achieves improved **performance**, **scalability**, and **maintainability** for URL caching.
 
 ---
-
 ### 4.6 Controller Class (`UrlShortenerController.java`)
 
-The **Controller Class** manages HTTP requests to shorten URLs and retrieve original URLs. It maps the endpoints to ensure they align with the **API Gateway configuration** and the **application.yml** properties.
-
-```java
+````java
 package tech.enok.shortener.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import tech.enok.shortener.service.UrlShortenerService;
 
 @RestController
-@RequestMapping("/shortener")
+@RequestMapping("/api/v1/shortener")
 public class UrlShortenerController {
+
+    @Value("${app.base-url}")
+    private String baseUrl;
 
     @Autowired
     private UrlShortenerService urlShortenerService;
 
     /**
-     * Endpoint to shorten a given long URL.
-     * Matches API Gateway: POST /shortener/shorten
-     * 
-     * @param longUrl - Original long URL sent in the request body.
-     * @return Shortened URL.
+     * Endpoint to shorten a URL.
+     * Example: POST /api/v1/shortener
+     * Request Body: { "longUrl": "https://example.com" }
+     * Returns: 201 Created with the shortened URL in the Location header.
      */
-    @PostMapping("/shorten")
-    public ResponseEntity<String> shortenUrl(@RequestBody String longUrl) {
+    @PostMapping
+    public ResponseEntity<Void> shortenUrl(@RequestBody String longUrl) {
         String shortUrl = urlShortenerService.shortenUrl(longUrl);
-        return ResponseEntity.ok(shortUrl);
+        String location = String.format("%s/%s", baseUrl, shortUrl);
+        return ResponseEntity.created(java.net.URI.create(location)).build();
     }
 
     /**
-     * Endpoint to redirect to the original long URL.
-     * Matches API Gateway: GET /shortener/{shortUrlId}
-     * 
-     * @param shortUrlId - Unique identifier for the shortened URL.
-     * @return Redirect to the long URL with HTTP status 302 (Found).
+     * Endpoint to retrieve the original URL.
+     * Example: GET /api/v1/shortener/{shortUrl}
+     * Returns: 302 Redirect if found, 404 Not Found if the URL doesn't exist.
      */
-    @GetMapping("/{shortUrlId}")
-    public ResponseEntity<Void> redirectToLongUrl(@PathVariable String shortUrlId) {
-        String longUrl = urlShortenerService.getLongUrl(shortUrlId);
+    @GetMapping("/{shortUrl}")
+    public ResponseEntity<Void> redirectToLongUrl(@PathVariable String shortUrl) {
+        String longUrl = urlShortenerService.getLongUrl(shortUrl);
         if (longUrl != null) {
             return ResponseEntity.status(302).header("Location", longUrl).build();
         } else {
@@ -663,77 +677,97 @@ public class UrlShortenerController {
         }
     }
 }
-
-```
-
-#### Key Highlights:
-
-1. **Class-level Mapping**:  
-   - **`@RequestMapping("/shortener")`**: Ensures that all endpoints under this controller are prefixed with `/shortener`.
-
-2. **POST Endpoint: `/shortener/shorten`**  
-   - **`@PostMapping("/shorten")`**:  
-     - Matches the API Gateway route **`POST /shortener/shorten`**.
-     - Accepts a long URL in the request body.
-     - Returns a shortened URL generated by the service.
-
-3. **GET Endpoint: `/shortener/{shortUrlId}`**  
-   - **`@GetMapping("/{shortUrlId}")`**:  
-     - Matches the API Gateway route **`GET /shortener/{shortUrlId}`**.
-     - Extracts the short URL ID as a path variable.
-     - Returns a **302 Redirect** with the long URL if it exists, or **404 Not Found** otherwise.
-
-4. **Integration with Service**:  
-   - Uses the `UrlShortenerService` to:
-     - **shortenUrl(longUrl)**: Generate a shortened URL.
-     - **getLongUrl(shortUrlId)**: Retrieve the original long URL from DynamoDB or Redis.
-
-5. **HTTP Status Codes**:
-   - **200 OK**: For successful short URL generation.
-   - **302 Found**: Redirects users to the original long URL.
-   - **404 Not Found**: If the short URL ID does not exist.
-
-#### Benefits:
-1. **Consistency**: Aligns perfectly with API Gateway, Lambda integration, and the base URL in `application.yml`.
-2. **Clean Code**: Separates HTTP concerns into the controller and business logic into the service layer.
-3. **RESTful Design**: Adheres to REST conventions for POST and GET methods.
-4. **Extensibility**: Easily extendable for additional features (e.g., analytics or deletion of short URLs).
+````
 
 ---
 
-#### Example Requests:
+### Example Requests and Responses
 
-1. **Shorten URL**:
-   - **Request**:  
-     ```http
-     POST /shortener/shorten
-     Content-Type: application/json
+#### **POST /api/v1/shortener**  
+Shorten a long URL.
 
-     https://www.youtube.com/watch?v=dQw4w9WgXcQ
-     ```
-   - **Response**:  
-     ```json
-     "https://enok.tech/shortener/abcd1234"
-     ```
+**Request**:
+```http
+POST /api/v1/shortener HTTP/1.1
+Host: shortener.enok.tech
+Content-Type: application/json
 
-2. **Redirect to Original URL**:
-   - **Request**:  
-     ```http
-     GET /shortener/abcd1234
-     ```
-   - **Response**:  
-     HTTP Status **302** with Header:  
-     ```http
-     Location: https://www.youtube.com/watch?v=dQw4w9WgXcQ
-     ```
+{
+    "longUrl": "https://example.com"
+}
+```
 
-3. **Invalid Short URL**:
-   - **Request**:  
-     ```http
-     GET /shortener/invalid123
-     ```
-   - **Response**:  
-     HTTP Status **404 Not Found**.
+**Response**:
+```http
+HTTP/1.1 201 Created
+Location: https://shortener.enok.tech/abcd1234
+```
+
+---
+
+#### **GET /api/v1/shortener/{shortUrl}**  
+Redirect to the original long URL.
+
+**Request**:
+```http
+GET /api/v1/shortener/abcd1234 HTTP/1.1
+Host: shortener.enok.tech
+```
+
+**Response (Redirect)**:
+```http
+HTTP/1.1 302 Found
+Location: https://example.com
+```
+
+---
+
+#### **GET /api/v1/shortener/{shortUrl} (Not Found)**  
+Invalid or non-existent short URL.
+
+**Request**:
+```http
+GET /api/v1/shortener/invalid123 HTTP/1.1
+Host: shortener.enok.tech
+```
+
+**Response**:
+```http
+HTTP/1.1 404 Not Found
+```
+
+---
+
+### Explanation
+
+1. **POST /api/v1/shortener**:  
+   - The request includes a `longUrl` in the JSON body.  
+   - A **201 Created** response is returned with the shortened URL in the `Location` header.
+
+2. **GET /api/v1/shortener/{shortUrl}**:  
+   - If the short URL exists, the server responds with a **302 Redirect** and the `Location` header pointing to the original URL.  
+   - If the short URL is invalid or does not exist, the server returns a **404 Not Found**.
+
+3. **HTTP Status Codes**:  
+   - **201 Created**: Resource successfully created.  
+   - **302 Found**: Temporary redirect to the original URL.  
+   - **404 Not Found**: The resource (short URL) does not exist.
+
+---
+
+### Benefits
+
+1. **API Client Usability**:  
+   - The `Location` header simplifies client interactions by providing the direct shortened URL for immediate use.
+
+2. **Clear Error Handling**:  
+   - Returns meaningful HTTP status codes to indicate success, redirection, or errors.
+
+3. **Improved Documentation**:  
+   - Example requests and responses make it easier for developers to integrate and test the API.
+
+4. **Standards Compliance**:  
+   - Follows RESTful conventions with proper HTTP methods and status codes.
 
 ---
 <br>
@@ -743,781 +777,80 @@ public class UrlShortenerController {
 The following sections outline each resource created for the **URL Shortener Application** using **Terraform**. By defining infrastructure as code, we ensure consistency, automation, and ease of deployment for all AWS resources.
 
 ---
-
-### **5.1 Terraform Folder Structure**
-
-To ensure clarity, maintainability, and modularity, the Terraform resources for the **URL Shortener Application** are organized into the following structure:
+### 5.1 Terraform Folder Structure
 
 ```
 terraform/
 │
-├── main.tf                 # Core Terraform resources for AWS Lambda, DynamoDB, API Gateway
-├── vpc.tf                  # VPC Configuration + Endpoints
-├── network.tf              # Network Configuration (subnets, security groups, route tables)
-├── ssl.tf                  # SSL Certificates with ACM
-├── alb.tf                  # Application Load Balancer (ALB) configuration
-├── domain.tf               # Domain Configuration (Route53 setup)
-├── waf.tf                  # AWS WAF Configuration for rate limiting
-├── apigateway.tf           # API Gateway resource configuration
-├── lambda.tf               # AWS Lambda Function definition
-├── dynamodb.tf             # DynamoDB Table setup
-├── redis.tf                # Redis (ElastiCache) configuration
-├── secrets_manager.tf      # AWS Secrets Manager for secure credentials
-├── cloudfront.tf           # AWS CloudFront Configuration for global caching
-├── outputs.tf              # Outputs for resource endpoints and ARNs
-├── variables.tf            # Configuration variables for reusability
-├── provider.tf             # AWS provider and Terraform backend configuration
-└── backend.tf              # Optional: Remote backend configuration (S3 bucket for state)
+├── main.tf                 # Root Terraform file that includes core resources and modules
+├── vpc.tf                  # VPC configuration, including subnets and endpoints
+├── network.tf              # Network components like route tables, security groups, and NACLs
+├── acm.tf                  # SSL Certificates provisioning with ACM
+├── alb.tf                  # Application Load Balancer configuration
+├── route53.tf              # Route 53 domain and DNS settings
+├── waf.tf                  # AWS WAF rules and Web ACL configuration
+├── apigateway.tf           # API Gateway configuration and integrations
+├── lambda.tf               # AWS Lambda function definition and deployment
+├── dynamodb.tf             # DynamoDB table configuration for URL mappings
+├── redis.tf                # Redis (ElastiCache) cluster setup
+├── secretsmanager.tf       # AWS Secrets Manager configuration
+├── cloudfront.tf           # CloudFront distribution for edge caching
+├── outputs.tf              # Outputs for Terraform-managed resources
+├── variables.tf            # Variables for reusable configurations
+└── backend.tf              # Optional backend for remote Terraform state (e.g., S3 bucket)
 ```
 
 ---
 
-### **Explanation**
+### Explanation:
 
-1. **`main.tf`**:  
-   - Defines core resources such as AWS Lambda, DynamoDB, and API Gateway.
+1. **Modular Structure**:  
+   - Each file is dedicated to a specific AWS resource or functionality.  
+   - For example, `vpc.tf` handles the VPC configuration, while `alb.tf` focuses on the Application Load Balancer.
 
-2. **`vpc.tf`**:  
-   - Creates the Virtual Private Cloud (VPC) and VPC Endpoints for DynamoDB, Secrets Manager, and S3.
+2. **`main.tf`**:  
+   - Acts as the central orchestration file.  
+   - It includes core definitions and references to other modular files.
 
-3. **`network.tf`**:  
-   - Configures public and private subnets, security groups, route tables, and network ACLs.
+3. **Outputs (`outputs.tf`)**:  
+   - Captures resource outputs (e.g., API Gateway URL, ALB DNS name) for easier reference after provisioning.
 
-4. **`ssl.tf`**:  
-   - Requests and manages SSL certificates using AWS Certificate Manager (ACM).
+4. **Variables (`variables.tf`)**:  
+   - Centralizes environment-specific configurations (e.g., CIDR ranges, resource tags) to avoid hardcoding values.
 
-5. **`alb.tf`**:  
-   - Configures the Application Load Balancer (ALB) to manage incoming traffic to the application.
-
-6. **`domain.tf`**:  
-   - Manages custom domain configurations using AWS Route 53.
-
-7. **`waf.tf`**:  
-   - Sets up AWS WAF to protect APIs with rate limiting and security rules.
-
-8. **`apigateway.tf`**:  
-   - Defines API Gateway resources, including routes and integrations with Lambda.
-
-9. **`lambda.tf`**:  
-   - Configures AWS Lambda function, including environment variables, permissions, and deployment settings.
-
-10. **`dynamodb.tf`**:  
-    - Creates and configures the DynamoDB table for persistent storage of URL mappings.
-
-11. **`redis.tf`**:  
-    - Sets up ElastiCache Redis in private subnets for low-latency caching.
-
-12. **`secrets_manager.tf`**:  
-    - Manages secure credentials using AWS Secrets Manager, including secret rotation policies.
-
-13. **`cloudfront.tf`**:  
-    - Configures AWS CloudFront to provide global caching for API Gateway responses.
-
-14. **`outputs.tf`**:  
-    - Defines Terraform outputs to display important endpoints, such as API Gateway URLs and resource ARNs.
-
-15. **`variables.tf`**:  
-    - Stores reusable configuration variables, reducing redundancy across files.
-
-16. **`provider.tf`**:  
-    - Configures the AWS provider and credentials to enable Terraform to interact with AWS.
-
-17. **`backend.tf`** *(Optional)*:  
-    - Sets up a remote backend (e.g., S3 bucket) for Terraform state files to ensure consistency and collaboration.
+5. **Backend (`backend.tf`)**:  
+   - Stores Terraform state remotely, typically in an S3 bucket, to ensure team collaboration and state integrity.
 
 ---
 
-### **Benefits**
+### Benefits:
 
-1. **Modularity**:  
-   - Each Terraform file focuses on a specific resource, improving readability and maintainability.
+1. **Maintainability**:  
+   - Clean, modular files make it easy to add, remove, or update resources.
 
-2. **Reusability**:  
-   - Common configurations, like variables and outputs, are centralized to reduce duplication.
+2. **Scalability**:  
+   - Structure supports scaling the infrastructure by adding new modules or configurations.
 
-3. **Automation**:  
-   - Terraform automates resource provisioning, ensuring consistent and repeatable deployments.
+3. **Reusability**:  
+   - Variables and outputs allow reuse across environments like development, staging, and production.
 
-4. **Scalability**:  
-   - The modular structure allows for the addition of new AWS resources without affecting existing configurations.
+4. **Collaboration**:  
+   - Teams can work simultaneously on different files without conflicts.
 
-5. **Collaboration**:  
-   - Version-controlled Terraform files enable teams to collaborate effectively.
-
-6. **Consistency**:  
-   - The structure aligns with AWS best practices and provides clear organization for infrastructure resources.
+5. **Clarity**:  
+   - Each Terraform file serves a single purpose, improving readability and understanding.
 
 ---
 
-### **Next Steps**
+### **5.2 VPC Configuration + Endpoints**
 
-Proceed to **Step 5.2 (VPC Configuration + Endpoints)** to define the Virtual Private Cloud (VPC) and integrate endpoints for DynamoDB, S3, and Secrets Manager.
-
----
-
-
-
-
-
-
-
-
-
----
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-### 5.1 DynamoDB Table
-
-The **DynamoDB Table** is used to store the mappings of short URLs to their corresponding long URLs. This ensures persistent and highly available storage.
-
-```hcl
-resource "aws_dynamodb_table" "url_mapping" {
-  name         = "URLMappings"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "shortUrl"
-
-  attribute {
-    name = "shortUrl"
-    type = "S"
-  }
-
-  server_side_encryption {
-    enabled = true
-  }
-
-  tags = {
-    Name        = "URLMappingsTable"
-    Environment = "Production"
-  }
-}
-```
-
-#### Explanation:
-
-1. **name**: Sets the table name to `URLMappings`.
-2. **billing_mode**: Uses `PAY_PER_REQUEST` mode, ensuring cost-efficiency with on-demand capacity instead of pre-provisioned capacity.
-3. **hash_key**: Defines `shortUrl` as the primary key for the table.
-4. **attribute**:
-   - Specifies the `shortUrl` attribute with the data type `S` (String).
-5. **server_side_encryption**:
-   - **enabled = true**: Encrypts all data stored in DynamoDB for security.
-6. **tags**:
-   - Adds metadata for resource management, such as `Name` and `Environment`.
-
-#### Benefits:
-- **High Availability**: DynamoDB automatically replicates data across multiple availability zones.
-- **Cost-Effective**: On-demand billing ensures you only pay for what you use.
-- **Scalability**: DynamoDB can scale seamlessly to handle growing traffic.
-- **Security**: Server-side encryption ensures data confidentiality.
-
----
-
-### 5.2 AWS Lambda Function
-
-The **AWS Lambda Function** hosts and executes the core logic of the **Shortener Application**. The code is packaged as a JAR file and deployed to AWS Lambda.
-
-```hcl
-resource "aws_lambda_function" "url_shortener_lambda" {
-  function_name = "url-shortener-lambda"
-  runtime       = "java21"
-  handler       = "tech.enok.shortener.LambdaHandler::handleRequest"
-  role          = aws_iam_role.lambda_exec_role.arn
-
-  s3_bucket = "shortener-app-bucket"
-  s3_key    = "lambda/shortener.jar"
-
-  environment {
-    variables = {
-      DYNAMODB_TABLE_NAME = aws_dynamodb_table.url_mapping.name
-      APP_BASE_URL        = "https://enok.tech/shortener"
-    }
-  }
-
-  tags = {
-    Name        = "ShortenerLambda"
-    Environment = "Production"
-  }
-}
-```
-
-#### Explanation:
-
-1. **function_name**: The name of the Lambda function (`url-shortener-lambda`).
-2. **runtime**: Specifies `java21` as the runtime environment for executing the JAR file.
-3. **handler**:
-   - Entry point of the Lambda function in the packaged code (`tech.enok.shortener.LambdaHandler::handleRequest`).
-   - Root package is `tech.enok.shortener` to maintain project organization.
-4. **role**:
-   - References an **IAM role** (`lambda_exec_role`) that grants permissions for AWS resources like DynamoDB and Secrets Manager.
-5. **s3_bucket** and **s3_key**:
-   - Code is stored in an S3 bucket (`shortener-app-bucket`).
-   - JAR file location is updated to `lambda/shortener.jar`.
-6. **environment.variables**:
-   - `DYNAMODB_TABLE_NAME`: References the DynamoDB table name (`URLMappings`).
-   - `APP_BASE_URL`: Base URL for the shortened links (`https://enok.tech/shortener`).
-7. **tags**:
-   - Updates the resource metadata to reflect the new application name: **"ShortenerLambda"**.
-
-#### Updates:
-- **Repository**: The code will be hosted at `https://github.com/enok/shortener`.
-- **Naming Consistency**: Updated naming for Lambda and S3 path to match "shortener".
-- **Base URL**: Adjusted to `https://enok.tech/shortener` for consistency.
-
-#### Benefits:
-- **Clear Organization**: Updated paths, S3 buckets, and handler names align with the repository structure.
-- **Consistency**: Unified naming (`shortener`) across code, infrastructure, and URLs.
-- **Flexibility**: Environment variables can be updated without modifying the code.
-
----
-
-### 5.3 API Gateway
-
-The **API Gateway** serves as the entry point for the application, routing HTTP requests to the AWS Lambda function. It exposes RESTful endpoints for shortening URLs and handling redirection.
-
-```hcl
-resource "aws_apigatewayv2_api" "api_gateway" {
-  name          = "url-shortener-api"
-  protocol_type = "HTTP"
-}
-
-resource "aws_apigatewayv2_stage" "api_stage" {
-  api_id      = aws_apigatewayv2_api.api_gateway.id
-  name        = "prod"
-  auto_deploy = true
-}
-
-resource "aws_apigatewayv2_integration" "lambda_integration" {
-  api_id           = aws_apigatewayv2_api.api_gateway.id
-  integration_type = "AWS_PROXY"
-  integration_uri  = aws_lambda_function.url_shortener_lambda.invoke_arn
-}
-
-resource "aws_apigatewayv2_route" "shorten_route" {
-  api_id    = aws_apigatewayv2_api.api_gateway.id
-  route_key = "POST /shortener/shorten"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
-}
-
-resource "aws_apigatewayv2_route" "redirect_route" {
-  api_id    = aws_apigatewayv2_api.api_gateway.id
-  route_key = "GET /shortener/{shortUrlId}"
-  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
-}
-```
-
-#### Explanation:
-
-1. **API Definition**:
-   - **aws_apigatewayv2_api**: Creates an HTTP API Gateway named `url-shortener-api`.
-   - **protocol_type = "HTTP"**: Specifies that this is an HTTP-based API.
-
-2. **Stage**:
-   - **aws_apigatewayv2_stage**: Deploys the API to the `prod` stage and enables automatic deployment.
-
-3. **Integration**:
-   - **aws_apigatewayv2_integration**:
-     - Integrates the API Gateway with the AWS Lambda function (`url-shortener-lambda`).
-     - Uses **AWS_PROXY** mode to forward the full request to Lambda.
-
-4. **Routes**:
-   - **shorten_route** (`POST /shortener/shorten`):
-     - Handles the API endpoint for shortening URLs.
-     - Calls the Lambda function to generate a shortened URL.
-   - **redirect_route** (`GET /shortener/{shortUrlId}`):
-     - Handles the redirection logic.
-     - Extracts `shortUrlId` from the path and forwards the request to Lambda.
-
-5. **Route Key**:
-   - Defines the HTTP method (`POST` or `GET`) and path (`/shortener/...`) for each route.
-
-#### Benefits:
-- **Centralized Entry Point**: API Gateway simplifies request handling and integrates seamlessly with AWS Lambda.
-- **RESTful API**: Exposes clean, standardized endpoints (`POST /shortener/shorten` and `GET /shortener/{shortUrlId}`).
-- **Scalability**: API Gateway automatically scales with traffic.
-- **Flexibility**: Routes can be extended to include additional endpoints in the future.
-- **Repository**: Code integration aligns with `https://github.com/enok/shortener`.
-
-#### Exposed Endpoints:
-1. **POST** → `https://<api-gateway-id>.execute-api.<region>.amazonaws.com/prod/shortener/shorten`
-2. **GET** → `https://<api-gateway-id>.execute-api.<region>.amazonaws.com/prod/shortener/{shortUrlId}`
-
----
-
-### 5.4 Redis (ElastiCache)
-
-The **Redis Cluster** (AWS ElastiCache) is used as a caching layer to speed up lookups for shortened URLs, reducing latency and DynamoDB reads.
-
-```hcl
-resource "aws_elasticache_cluster" "redis_cluster" {
-  cluster_id           = "shortener-redis-cluster"
-  engine               = "redis"
-  node_type            = "cache.t2.micro"
-  num_cache_nodes      = 1
-  port                 = 6379
-  parameter_group_name = "default.redis6.x"
-
-  tags = {
-    Name        = "ShortenerRedis"
-    Environment = "Production"
-  }
-}
-```
-
-#### Explanation:
-
-1. **cluster_id**:  
-   - The name of the Redis cluster is `shortener-redis-cluster`.
-
-2. **engine**:  
-   - Specifies `redis` as the caching engine.
-
-3. **node_type**:  
-   - Uses `cache.t2.micro`, a cost-effective instance type suitable for testing and light workloads.  
-   - Can be upgraded to higher instance types as the application scales.
-
-4. **num_cache_nodes**:  
-   - Sets up a single Redis node. For production, multiple nodes can be configured for redundancy.
-
-5. **port**:  
-   - The default Redis port is `6379`.
-
-6. **parameter_group_name**:  
-   - Uses the default Redis 6.x parameter group for configuration.
-
-7. **tags**:  
-   - Adds metadata for resource identification:  
-     - `Name`: **ShortenerRedis**  
-     - `Environment`: **Production**
-
-#### Benefits:
-- **Performance**: Reduces latency by caching frequently accessed short URL lookups.
-- **Cost Efficiency**: Decreases DynamoDB read costs by serving cached results.
-- **Scalability**: Redis can scale vertically or horizontally to accommodate growing traffic.
-- **Persistence**: Configurable to support Redis persistence if required in the future.
-
-#### Use in Application:
-- **Cache-first Strategy**:  
-   - Lookup short URLs in Redis first.  
-   - If not found, fetch from DynamoDB and update the Redis cache.
-
-#### Connection:
-- Connect to Redis using the **host** and **port** of the ElastiCache cluster.
-- In production, use security groups to restrict access to the Redis endpoint.
-
----
-
-### 5.5 AWS Secrets Manager
-
-The **AWS Secrets Manager** securely stores and retrieves sensitive credentials, such as Redis host, Redis port, and DynamoDB table name. This eliminates the need to hardcode sensitive values in the application.
-
-````hcl
-resource "aws_secretsmanager_secret" "url_shortener_secrets" {
-  name = "shortener/secrets"
-
-  tags = {
-    Name        = "ShortenerSecrets"
-    Environment = "Production"
-  }
-}
-
-resource "aws_secretsmanager_secret_version" "url_shortener_secrets_version" {
-  secret_id     = aws_secretsmanager_secret.url_shortener_secrets.id
-  secret_string = jsonencode({
-    redisHost = "redis.shortener-enok.tech",
-    redisPort = "6379",
-    dbTable   = "URLMappings"
-  })
-}
-````
-
----
-
-#### Explanation:
-
-1. **`aws_secretsmanager_secret`**:  
-   - Creates a new secret in AWS Secrets Manager under the name **`shortener/secrets`**.
-
-2. **`aws_secretsmanager_secret_version`**:  
-   - Stores the actual secret as a JSON string in AWS Secrets Manager.  
-   - Example JSON:
-     ```json
-     {
-       "redisHost": "redis.shortener-enok.tech",
-       "redisPort": "6379",
-       "dbTable": "URLMappings"
-     }
-     ```
-
-3. **Tags**:  
-   - Adds metadata for the secret:
-     - **Name**: ShortenerSecrets
-     - **Environment**: Production.
-
-4. **Custom Redis Endpoint**:  
-   - Uses the DNS name `redis.shortener-enok.tech`, which is a CNAME pointing to the AWS ElastiCache Redis instance.
-
----
-
-#### Integration in the Application:
-
-The secrets are dynamically fetched at runtime using the `SecretsService`.
-
-````java
-package tech.enok.shortener.service;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.stereotype.Service;
-import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
-import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
-
-import java.util.Map;
-
-@Service
-public class SecretsService {
-
-    private final SecretsManagerClient secretsClient;
-
-    public SecretsService() {
-        this.secretsClient = SecretsManagerClient.builder().build();
-    }
-
-    public Map<String, String> getSecrets(String secretName) {
-        GetSecretValueRequest request = GetSecretValueRequest.builder()
-                .secretId(secretName)
-                .build();
-
-        String secretString = secretsClient.getSecretValue(request).secretString();
-
-        try {
-            return new ObjectMapper().readValue(secretString, Map.class);
-        } catch (Exception e) {
-            throw new RuntimeException("Error parsing secrets from AWS Secrets Manager", e);
-        }
-    }
-}
-````
-
----
-
-#### application.yml Configuration:
-
-````yaml
-aws:
-  secrets:
-    name: shortener/secrets
-
-spring:
-  redis:
-    host: ${REDIS_HOST:redis.shortener-enok.tech}
-    port: ${REDIS_PORT:6379}
-````
-
----
-
-#### Example Secrets JSON:
-
-This is how the secrets are stored in AWS Secrets Manager:
-
-````json
-{
-  "redisHost": "redis.shortener-enok.tech",
-  "redisPort": "6379",
-  "dbTable": "URLMappings"
-}
-````
-
----
-
-#### Benefits:
-
-1. **Secure Credential Storage**:  
-   - Secrets are encrypted and stored securely in AWS Secrets Manager.
-
-2. **Dynamic Retrieval**:  
-   - Secrets are fetched dynamically at runtime, avoiding hardcoded values in code or configuration files.
-
-3. **Automatic Rotation**:  
-   - AWS Secrets Manager supports automatic rotation of credentials, enhancing security.
-
-4. **Environment-Specific Configurations**:  
-   - Use different secrets for development, staging, and production environments.
-
-5. **Simplified Management**:  
-   - Updates to secrets in AWS do not require changes in application code.
-
-6. **Custom Redis Endpoint**:  
-   - Integrates with the user-friendly DNS name `redis.shortener-enok.tech`, abstracting the underlying AWS ElastiCache endpoint.
-
-7. **Auditing**:  
-   - AWS Secrets Manager logs all access to secrets, making it easier to monitor usage and comply with security requirements.
-
-8. **Scalability and Reliability**:  
-   - AWS Secrets Manager is fully managed, ensuring high availability and secure access.
-
----
-
-By using **AWS Secrets Manager**, the application achieves **secure, scalable, and manageable handling of sensitive credentials**, ensuring minimal risk and easier maintenance.
-
----
-
-### 5.6 AWS CloudFront Configuration
-
-AWS CloudFront is configured as a Content Delivery Network (CDN) to globally cache API Gateway responses. This improves response times and reduces latency for users accessing the API.
-
-````hcl
-resource "aws_cloudfront_distribution" "shortener_cdn" {
-  enabled = true
-  comment = "CloudFront distribution for URL Shortener API"
-
-  origin {
-    domain_name = aws_apigatewayv2_api.shortener_api.api_endpoint
-    origin_id   = "apiGatewayOrigin"
-
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
-
-  default_cache_behavior {
-    target_origin_id       = "apiGatewayOrigin"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
-    cached_methods         = ["GET", "HEAD"]
-    compress               = true
-    default_ttl            = 60
-    min_ttl                = 0
-    max_ttl                = 3600
-
-    forwarded_values {
-      query_string = true
-      cookies {
-        forward = "none"
-      }
-    }
-  }
-
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  tags = {
-    Name        = "ShortenerCloudFront"
-    Environment = "Production"
-  }
-}
-````
-
----
-
-#### Explanation:
-
-1. **`aws_cloudfront_distribution`**:  
-   - Creates a CloudFront distribution to cache and serve content globally.
-
-2. **`origin`**:  
-   - Configures **API Gateway** as the origin of CloudFront.  
-   - **`domain_name`**: The API Gateway endpoint (automatically fetched from Terraform).  
-   - **`origin_protocol_policy`**: Enforces HTTPS communication between CloudFront and the origin.
-
-3. **`default_cache_behavior`**:  
-   - Defines the caching behavior for CloudFront:  
-     - **`viewer_protocol_policy`**: Redirects HTTP requests to HTTPS.  
-     - **Allowed Methods**: Allows GET, HEAD, and OPTIONS requests.  
-     - **Caching**:  
-       - **`default_ttl`**: Default Time-to-Live for cached content (60 seconds).  
-       - **`min_ttl`**: Minimum Time-to-Live for cache (0 seconds).  
-       - **`max_ttl`**: Maximum cache duration (3600 seconds).
-
-4. **`viewer_certificate`**:  
-   - Uses the default CloudFront SSL certificate to secure connections.
-
-5. **`restrictions`**:  
-   - Configures global access with no geographic restrictions.
-
-6. **Tags**:  
-   - Adds metadata to identify and manage the CloudFront resource.
-
----
-
-#### Benefits:
-
-1. **Global Content Delivery**:  
-   - CloudFront caches API Gateway responses at edge locations worldwide, reducing latency for users.
-
-2. **Improved Performance**:  
-   - Caching frequently accessed content ensures faster responses and lower load on API Gateway and Lambda.
-
-3. **Security**:  
-   - Enforces HTTPS communication between clients, CloudFront, and the API Gateway.
-
-4. **Cost Efficiency**:  
-   - By reducing the number of direct API Gateway and Lambda requests, CloudFront lowers the operational costs of the application.
-
-5. **Automatic Compression**:  
-   - CloudFront automatically compresses content (e.g., JSON responses), reducing data transfer costs and improving client performance.
-
-6. **Scalability**:  
-   - CloudFront can handle massive amounts of requests with low latency, ensuring the application scales seamlessly under high traffic.
-
-7. **Flexible TTLs**:  
-   - Configurable cache behavior allows fine-tuning of content freshness.
-
-8. **Resiliency**:  
-   - CloudFront serves cached content even if the API Gateway or Lambda backend experiences downtime.
-
----
-
-By integrating **CloudFront** with API Gateway, the application achieves **global performance improvements**, lower latency, and reduced operational costs, ensuring a fast and reliable user experience.
-
----
-
-### 5.7 AWS WAF Configuration
-
-AWS Web Application Firewall (WAF) is configured to protect the API Gateway from abuse, including rate limiting and basic security threats. WAF ensures that the application remains resilient to malicious traffic while enforcing request limits.
-
-````hcl
-resource "aws_wafv2_web_acl" "shortener_waf" {
-  name  = "shortener-waf"
-  scope = "REGIONAL"
-
-  default_action {
-    allow {}
-  }
-
-  rule {
-    name     = "RateLimitRule"
-    priority = 1
-
-    action {
-      block {}
-    }
-
-    statement {
-      rate_based_statement {
-        limit              = 2000
-        aggregate_key_type = "IP"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "RateLimitRuleMetrics"
-      sampled_requests_enabled   = true
-    }
-  }
-
-  visibility_config {
-    cloudwatch_metrics_enabled = true
-    metric_name                = "ShortenerWAFMetrics"
-    sampled_requests_enabled   = true
-  }
-
-  tags = {
-    Name        = "ShortenerWAF"
-    Environment = "Production"
-  }
-}
-
-resource "aws_wafv2_web_acl_association" "shortener_waf_association" {
-  resource_arn = aws_apigatewayv2_api.shortener_api.arn
-  web_acl_arn  = aws_wafv2_web_acl.shortener_waf.arn
-}
-````
-
----
-
-#### Explanation:
-
-1. **`aws_wafv2_web_acl`**:  
-   - Creates a **Web ACL** for the application with rules to protect API Gateway.
-
-2. **Default Action**:  
-   - If no rules match, allow all requests by default. Additional rules can be added for stricter security.
-
-3. **`RateLimitRule`**:  
-   - Enforces rate limiting with the following parameters:
-     - **Limit**: Allows a maximum of **2000 requests per 5 minutes** per IP.  
-     - **Action**: Blocks the IP when the limit is exceeded.  
-
-4. **`visibility_config`**:  
-   - Enables CloudWatch metrics and sampled request logs for monitoring the WAF activity.
-
-5. **`aws_wafv2_web_acl_association`**:  
-   - Associates the WAF Web ACL with the API Gateway to enforce the defined rules.
-
-6. **Tags**:  
-   - Metadata for identification and management of the WAF resource.
-
----
-
-#### Benefits:
-
-1. **Abuse Protection**:  
-   - Rate limiting prevents abuse by limiting the number of requests per IP, mitigating risks such as DDoS attacks.
-
-2. **Security Rules**:  
-   - WAF rules can be extended to block malicious patterns, SQL injections, and other common web vulnerabilities.
-
-3. **Integration with CloudWatch**:  
-   - Logs and metrics provide visibility into traffic patterns and potential threats.
-
-4. **Scalable Protection**:  
-   - AWS WAF automatically scales to protect API Gateway under high traffic loads.
-
-5. **Custom Rules**:  
-   - You can define additional security rules to match the specific needs of the application.
-
-6. **Cost Optimization**:  
-   - By blocking unnecessary or malicious requests early, WAF reduces API Gateway and Lambda invocation costs.
-
-7. **Resilience**:  
-   - WAF ensures the application remains available and performant even during traffic spikes or malicious attacks.
-
-8. **Centralized Security Management**:  
-   - WAF can be managed centrally, providing a uniform security layer across multiple AWS resources.
-
----
-
-By integrating **AWS WAF** with API Gateway, the application achieves enhanced **security** and **resilience** through rate limiting and traffic filtering, protecting against abuse and ensuring reliable operations.
-
-
----
-
-### 5.8 Network Configuration
-
-This section defines a **VPC**, its subnets, route tables, security groups, and network ACLs to ensure secure and isolated network communication.
+This section defines the **Virtual Private Cloud (VPC)** setup, including public and private subnets, internet gateway, and VPC endpoints for secure communication with AWS services.
 
 ````hcl
 # VPC Configuration
 resource "aws_vpc" "shortener_vpc" {
-  cidr_block = "10.0.0.0/16"
-  enable_dns_support = true
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
@@ -1526,31 +859,55 @@ resource "aws_vpc" "shortener_vpc" {
   }
 }
 
-# Subnets (Public and Private)
-resource "aws_subnet" "public_subnet" {
+# Public Subnets
+resource "aws_subnet" "public_subnet_1" {
   vpc_id                  = aws_vpc.shortener_vpc.id
   cidr_block              = "10.0.1.0/24"
   availability_zone       = "us-east-1a"
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "PublicSubnet"
+    Name        = "PublicSubnet1"
     Environment = "Production"
   }
 }
 
-resource "aws_subnet" "private_subnet" {
+resource "aws_subnet" "public_subnet_2" {
   vpc_id                  = aws_vpc.shortener_vpc.id
   cidr_block              = "10.0.2.0/24"
-  availability_zone       = "us-east-1a"
+  availability_zone       = "us-east-1b"
+  map_public_ip_on_launch = true
 
   tags = {
-    Name        = "PrivateSubnet"
+    Name        = "PublicSubnet2"
     Environment = "Production"
   }
 }
 
-# Internet Gateway for Public Subnet
+# Private Subnets
+resource "aws_subnet" "private_subnet_1" {
+  vpc_id            = aws_vpc.shortener_vpc.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = "us-east-1a"
+
+  tags = {
+    Name        = "PrivateSubnet1"
+    Environment = "Production"
+  }
+}
+
+resource "aws_subnet" "private_subnet_2" {
+  vpc_id            = aws_vpc.shortener_vpc.id
+  cidr_block        = "10.0.4.0/24"
+  availability_zone = "us-east-1b"
+
+  tags = {
+    Name        = "PrivateSubnet2"
+    Environment = "Production"
+  }
+}
+
+# Internet Gateway
 resource "aws_internet_gateway" "shortener_igw" {
   vpc_id = aws_vpc.shortener_vpc.id
 
@@ -1560,7 +917,113 @@ resource "aws_internet_gateway" "shortener_igw" {
   }
 }
 
-# Route Table and Association for Public Subnet
+# VPC Endpoints for AWS Services
+resource "aws_vpc_endpoint" "dynamodb_endpoint" {
+  vpc_id            = aws_vpc.shortener_vpc.id
+  service_name      = "com.amazonaws.us-east-1.dynamodb"
+  vpc_endpoint_type = "Gateway"
+
+  route_table_ids = [
+    aws_route_table.public_route_table.id
+  ]
+
+  tags = {
+    Name        = "DynamoDBEndpoint"
+    Environment = "Production"
+  }
+}
+
+resource "aws_vpc_endpoint" "s3_endpoint" {
+  vpc_id            = aws_vpc.shortener_vpc.id
+  service_name      = "com.amazonaws.us-east-1.s3"
+  vpc_endpoint_type = "Gateway"
+
+  route_table_ids = [
+    aws_route_table.public_route_table.id
+  ]
+
+  tags = {
+    Name        = "S3Endpoint"
+    Environment = "Production"
+  }
+}
+
+resource "aws_vpc_endpoint" "secrets_manager_endpoint" {
+  vpc_id            = aws_vpc.shortener_vpc.id
+  service_name      = "com.amazonaws.us-east-1.secretsmanager"
+  vpc_endpoint_type = "Interface"
+
+  subnet_ids = [
+    aws_subnet.private_subnet_1.id,
+    aws_subnet.private_subnet_2.id
+  ]
+
+  security_group_ids = [
+    aws_security_group.shortener_sg.id
+  ]
+
+  tags = {
+    Name        = "SecretsManagerEndpoint"
+    Environment = "Production"
+  }
+}
+````
+
+---
+
+### **Explanation**
+
+1. **VPC Configuration**:  
+   - A Virtual Private Cloud with CIDR block `10.0.0.0/16` to isolate network resources.
+
+2. **Public Subnets**:  
+   - Two public subnets in Availability Zones **us-east-1a** and **us-east-1b** for high availability.  
+   - Used for resources requiring internet access, like the Application Load Balancer.
+
+3. **Private Subnets**:  
+   - Two private subnets in Availability Zones **us-east-1a** and **us-east-1b** for resources like Lambda functions and Redis.
+
+4. **Internet Gateway**:  
+   - Enables outbound internet connectivity for resources in public subnets.
+
+5. **VPC Endpoints**:  
+   - **DynamoDB Endpoint**: Provides private, secure access to DynamoDB without needing internet access.  
+   - **S3 Endpoint**: Ensures direct access to Amazon S3 through the VPC.  
+   - **Secrets Manager Endpoint**: Allows Lambda functions in private subnets to access AWS Secrets Manager securely.
+
+---
+
+### **Benefits**
+
+1. **Network Isolation**:  
+   - Ensures that public and private resources are logically separated.
+
+2. **High Availability**:  
+   - Resources are deployed across multiple Availability Zones for fault tolerance.
+
+3. **Improved Security**:  
+   - VPC Endpoints remove the need for public internet access to services like DynamoDB and S3.
+
+4. **Reduced Latency and Costs**:  
+   - Gateway endpoints improve performance and reduce costs associated with data transfer.
+
+5. **Scalability**:  
+   - The VPC and subnets can easily scale as more resources are added to the infrastructure.
+
+---
+
+### **Next Steps**
+
+Proceed to **Step 5.3 (Network Configuration)** to set up route tables, security groups, and network ACLs for the VPC.
+
+---
+
+### **5.3 Network Configuration**
+
+This section configures route tables, security groups, and network ACLs to control and secure traffic between public and private subnets.
+
+````hcl
+# Route Table for Public Subnets
 resource "aws_route_table" "public_route_table" {
   vpc_id = aws_vpc.shortener_vpc.id
 
@@ -1570,36 +1033,36 @@ resource "aws_route_table" "public_route_table" {
   }
 }
 
-resource "aws_route" "public_internet_route" {
-  route_table_id         = aws_route_table.public_route_table.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.shortener_igw.id
-}
-
-resource "aws_route_table_association" "public_subnet_association" {
-  subnet_id      = aws_subnet.public_subnet.id
+# Public Subnet Route Association
+resource "aws_route_table_association" "public_subnet_1_association" {
+  subnet_id      = aws_subnet.public_subnet_1.id
   route_table_id = aws_route_table.public_route_table.id
 }
 
-# Security Group for Lambda and ElastiCache
-resource "aws_security_group" "shortener_sg" {
+resource "aws_route_table_association" "public_subnet_2_association" {
+  subnet_id      = aws_subnet.public_subnet_2.id
+  route_table_id = aws_route_table.public_route_table.id
+}
+
+# Security Group for Application Load Balancer and API Gateway
+resource "aws_security_group" "alb_sg" {
   vpc_id = aws_vpc.shortener_vpc.id
-  name   = "ShortenerSecurityGroup"
+  name   = "ALBSecurityGroup"
 
   ingress {
-    description = "Allow HTTPS inbound traffic"
-    from_port   = 443
-    to_port     = 443
+    description = "Allow HTTP traffic"
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    description = "Allow Redis connections"
-    from_port   = 6379
-    to_port     = 6379
+    description = "Allow HTTPS traffic"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -1611,23 +1074,70 @@ resource "aws_security_group" "shortener_sg" {
   }
 
   tags = {
-    Name        = "ShortenerSecurityGroup"
+    Name        = "ALBSecurityGroup"
     Environment = "Production"
   }
 }
 
-# Network ACLs for Public and Private Subnets
-resource "aws_network_acl" "shortener_nacl" {
+# Security Group for Lambda and Redis
+resource "aws_security_group" "lambda_redis_sg" {
   vpc_id = aws_vpc.shortener_vpc.id
+  name   = "LambdaRedisSecurityGroup"
+
+  ingress {
+    description     = "Allow HTTPS for Lambda functions"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    cidr_blocks     = ["10.0.0.0/16"]
+  }
+
+  ingress {
+    description     = "Allow Redis traffic from Lambda"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    cidr_blocks     = ["10.0.0.0/16"]
+  }
+
+  egress {
+    description     = "Allow all outbound traffic"
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+
   tags = {
-    Name        = "ShortenerNACL"
+    Name        = "LambdaRedisSecurityGroup"
     Environment = "Production"
   }
+}
+
+# Network ACLs (NACLs) for Public Subnets
+resource "aws_network_acl" "public_nacl" {
+  vpc_id = aws_vpc.shortener_vpc.id
+
+  tags = {
+    Name        = "PublicNACL"
+    Environment = "Production"
+  }
+}
+
+resource "aws_network_acl_rule" "allow_http_inbound" {
+  network_acl_id = aws_network_acl.public_nacl.id
+  rule_number    = 100
+  protocol       = "tcp"
+  rule_action    = "allow"
+  egress         = false
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 80
+  to_port        = 80
 }
 
 resource "aws_network_acl_rule" "allow_https_inbound" {
-  network_acl_id = aws_network_acl.shortener_nacl.id
-  rule_number    = 100
+  network_acl_id = aws_network_acl.public_nacl.id
+  rule_number    = 110
   protocol       = "tcp"
   rule_action    = "allow"
   egress         = false
@@ -1636,19 +1146,8 @@ resource "aws_network_acl_rule" "allow_https_inbound" {
   to_port        = 443
 }
 
-resource "aws_network_acl_rule" "allow_redis_inbound" {
-  network_acl_id = aws_network_acl.shortener_nacl.id
-  rule_number    = 110
-  protocol       = "tcp"
-  rule_action    = "allow"
-  egress         = false
-  cidr_block     = "10.0.0.0/16"
-  from_port      = 6379
-  to_port        = 6379
-}
-
 resource "aws_network_acl_rule" "allow_all_outbound" {
-  network_acl_id = aws_network_acl.shortener_nacl.id
+  network_acl_id = aws_network_acl.public_nacl.id
   rule_number    = 200
   protocol       = "-1"
   rule_action    = "allow"
@@ -1661,51 +1160,200 @@ resource "aws_network_acl_rule" "allow_all_outbound" {
 
 ---
 
-### Explanation:
+### **Explanation**
 
-1. **VPC**:  
-   - Defines a Virtual Private Cloud with a **`10.0.0.0/16`** CIDR block to isolate resources securely.
+1. **Route Table and Associations**:  
+   - A single route table (`public_route_table`) manages routing for both public subnets.
 
-2. **Public and Private Subnets**:  
-   - Public Subnet: For resources requiring internet access, such as API Gateway.  
-   - Private Subnet: For resources like Lambda and ElastiCache.
+2. **Security Groups**:  
+   - **ALB Security Group**: Allows inbound HTTP (80) and HTTPS (443) traffic for the Application Load Balancer.  
+   - **Lambda and Redis Security Group**:  
+     - Allows Redis traffic (`6379`) within the VPC.  
+     - Allows HTTPS traffic for Lambda functions.
 
-3. **Internet Gateway**:  
-   - Connects the public subnet to the internet.
-
-4. **Route Table and Route Association**:  
-   - Routes external traffic to the internet gateway for public subnets.
-
-5. **Security Group**:  
-   - Allows inbound HTTPS (443) for API Gateway and Redis access (6379) within the VPC.  
-   - Allows all outbound traffic for communication with external services.
-
-6. **Network ACLs (NACL)**:  
-   - Adds an additional layer of security to control inbound and outbound traffic for subnets.
+3. **Network ACLs (NACL)**:  
+   - **Public NACL**:  
+     - Allows inbound HTTP (80) and HTTPS (443) traffic.  
+     - Allows all outbound traffic to external services.  
+   - Adds a stateless layer of security at the subnet level.
 
 ---
 
-### Benefits:
+### **Benefits**
 
-1. **Isolation and Security**:  
-   - Resources are isolated within a VPC, providing enhanced security.
+1. **Granular Traffic Control**:  
+   - Security Groups and NACLs allow fine-grained control over traffic within the VPC.
 
-2. **Granular Access Control**:  
-   - Security Groups and Network ACLs allow fine-grained control over traffic.
+2. **High Availability**:  
+   - Public subnets ensure external access for resources like ALB and API Gateway.
 
-3. **Public and Private Subnets**:  
-   - Public subnet exposes API Gateway while private subnets keep Lambda and ElastiCache secure.
+3. **Defense in Depth**:  
+   - Combines Security Groups (stateful) and NACLs (stateless) for multi-layered network protection.
 
-4. **Scalable and Flexible**:  
-   - AWS VPC supports scaling, enabling the addition of more resources or subnets as needed.
+4. **Secure Redis and Lambda Access**:  
+   - Private subnets are protected, ensuring internal communication without exposure to the internet.
 
-5. **Defense in Depth**:  
-   - Combining Security Groups and Network ACLs provides multiple layers of security.
-
-6. **Cost Efficiency**:  
-   - Resources like ElastiCache can reside in private subnets, minimizing unnecessary exposure.
+5. **Scalable Design**:  
+   - Easily expandable to add more subnets or resources as the application grows.
 
 ---
 
-This **network configuration** ensures secure communication and access control for all AWS resources, aligning with best practices for production-ready infrastructure.
+### **Next Steps**
 
+Proceed to **Step 5.4 (SSL Certificates with ACM)** to configure SSL/TLS certificates for secure HTTPS traffic.
+
+---
+### **5.4 SSL Certificates with ACM**
+
+This step generates a **free SSL/TLS certificate** using AWS Certificate Manager (ACM) for the subdomain `shortener.enok.tech`. The process includes creating a **Route 53 Hosted Zone** for `enok.tech` and configuring DNS validation. Instructions for manual DNS validation in GoDaddy are also provided.
+
+---
+
+#### **Terraform Configuration**
+
+````hcl
+# 1. Create Route 53 Hosted Zone for the Domain
+resource "aws_route53_zone" "enok_tech_zone" {
+  name = "enok.tech"
+
+  tags = {
+    Name        = "EnokTechHostedZone"
+    Environment = "Production"
+  }
+}
+
+# 2. Request SSL Certificate for Subdomain using ACM
+resource "aws_acm_certificate" "shortener_ssl_cert" {
+  domain_name       = "shortener.enok.tech"
+  validation_method = "DNS"
+
+  tags = {
+    Name        = "ShortenerSSLCertificate"
+    Environment = "Production"
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# 3. Route 53 DNS Validation Records for ACM Certificate
+resource "aws_route53_record" "ssl_validation_record" {
+  for_each = {
+    for dvo in aws_acm_certificate.shortener_ssl_cert.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      value  = dvo.resource_record_value
+    }
+  }
+
+  zone_id = aws_route53_zone.enok_tech_zone.id
+  name    = each.value.name
+  type    = each.value.type
+  records = [each.value.value]
+  ttl     = 60
+}
+
+# 4. Validate the ACM Certificate
+resource "aws_acm_certificate_validation" "shortener_ssl_cert_validation" {
+  certificate_arn         = aws_acm_certificate.shortener_ssl_cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.ssl_validation_record : record.fqdn]
+}
+
+# 5. Route 53 Record to Point Subdomain to ALB
+resource "aws_route53_record" "shortener_alb_record" {
+  zone_id = aws_route53_zone.enok_tech_zone.id
+  name    = "shortener.enok.tech"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.shortener_alb.dns_name
+    zone_id                = aws_lb.shortener_alb.zone_id
+    evaluate_target_health = true
+  }
+}
+````
+
+---
+
+### **Manual Steps: Free SSL Certificate with GoDaddy DNS**
+
+If you're using **GoDaddy DNS** to manage your domain (`enok.tech`) instead of Route 53, follow these steps for manual DNS validation:
+
+1. **Log in to AWS Certificate Manager (ACM)**:
+   - Open the AWS ACM console and select **Request a Public Certificate**.
+
+2. **Request a Certificate**:
+   - Enter the subdomain `shortener.enok.tech` and choose **DNS Validation**.
+
+3. **Retrieve CNAME Records**:
+   - ACM will generate **CNAME records** for DNS validation:
+     - Example:  
+       - **Name**: `_abc123.shortener.enok.tech`  
+       - **Value**: `_abc123.acm-validations.aws.`  
+
+4. **Log in to GoDaddy DNS Settings**:
+   - Go to **DNS Management** for your domain `enok.tech`.
+   - Add the provided **CNAME records**:
+     - **Name**: `_abc123.shortener.enok.tech`  
+     - **Type**: `CNAME`  
+     - **Value**: `_abc123.acm-validations.aws.`  
+
+5. **Wait for Validation**:
+   - DNS validation typically completes within 5-10 minutes, but it may take up to an hour.
+   - The ACM certificate status will change to **Issued**.
+
+6. **Confirm the Certificate**:
+   - Return to AWS ACM and verify that the certificate has been issued successfully.
+
+---
+
+### **Explanation**
+
+1. **`aws_route53_zone`**:  
+   - Creates a Hosted Zone for the domain `enok.tech`.
+
+2. **`aws_acm_certificate`**:  
+   - Requests a free public SSL certificate for the subdomain `shortener.enok.tech` using DNS validation.
+
+3. **`aws_route53_record`**:  
+   - Automatically creates the CNAME validation records for ACM within Route 53.
+
+4. **`aws_acm_certificate_validation`**:  
+   - Verifies the DNS records to validate and issue the certificate.
+
+5. **Manual DNS Instructions**:  
+   - For GoDaddy DNS, the CNAME validation records need to be added manually.
+
+6. **`aws_route53_record` (Alias)**:  
+   - Maps the subdomain `shortener.enok.tech` to the Application Load Balancer (ALB).
+
+---
+
+### **Benefits**
+
+1. **Free SSL Certificates**:  
+   - AWS ACM provides free SSL certificates for use with AWS services like ALB, API Gateway, and CloudFront.
+
+2. **Secure Communication**:  
+   - HTTPS ensures encrypted communication between clients and the application.
+
+3. **Automation with Terraform**:  
+   - DNS validation and subdomain configuration are automated when using Route 53.
+
+4. **Custom Subdomain**:  
+   - Securely host your application at `shortener.enok.tech`.
+
+5. **Renewal Management**:  
+   - ACM automatically renews certificates, eliminating manual overhead.
+
+6. **Manual DNS Support**:  
+   - Provides steps to integrate ACM with third-party DNS providers like GoDaddy.
+
+---
+
+### **Next Steps**
+
+Proceed to **Step 5.5 (Application Load Balancer)** to configure the ALB and attach the SSL certificate for secure HTTPS traffic.
+
+---
