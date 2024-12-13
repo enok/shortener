@@ -1,215 +1,373 @@
 # URL Shortener Application
 
-The **URL Shortener Application** is a robust, secure, and scalable system designed to shorten URLs, provide fast redirection, and deliver insightful usage analytics. This solution is built with **Java 21** and **Spring Boot 3** and leverages modern AWS cloud-native services to ensure high availability, performance, and security.
+The **URL Shortener Application** is a robust, secure, and scalable system designed to shorten URLs, manage redirects, and deliver insightful usage analytics. Built with **Java 21** and **Spring Boot 3**, it leverages modern AWS cloud-native services to ensure high availability, performance, and security.
 
-Key highlights of the application include:
-
-- **Core Functionality**: Shortens long URLs and redirects users seamlessly using a RESTful API.
-- **Caching**: Redis (AWS ElastiCache) is integrated to speed up URL lookups and reduce latency.
-- **Persistent Storage**: DynamoDB securely stores URL mappings for durability and scalability.
-- **Security**: Features OAuth2 authentication (via Google), AWS WAF for rate limiting, and AWS Secrets Manager for secure credential storage.
-- **Multi-Region Deployment**: Ensures high availability using DynamoDB Global Tables and AWS Lambda across regions.
-- **ETL and Analytics**: AWS Glue automates metadata extraction, while AWS OpenSearch visualizes API usage and performance.
-- **Automation**: A GitHub Actions CI/CD pipeline handles infrastructure provisioning (via Terraform) and deployment to AWS.
-
-This document provides a detailed breakdown of the application's architecture, design patterns, code implementation, infrastructure, CI/CD pipeline, and a structured roadmap for development. It also includes architecture diagrams to help visualize the system flow.
-
-Refer to the **Table of Contents** below for a step-by-step guide to the entire solution.
-
+---
 <br>
 
-# Table of Contents
+## **Table of Contents**
 
-1. [Step 1: Solution Overview](#step-1-solution-overview)
-2. [Step 2: Key Features](#step-2-key-features)
-3. [Step 3: Architecture](#step-3-architecture)
-4. [Step 4: Design Patterns](#step-4-design-patterns)
-5. [Step 5: Code Implementation](#step-5-code-implementation)
-   - [5.1 Dependencies (`pom.xml`)](#51-dependencies-pomxml)
-   - [5.2 Configuration (`application.yml`)](#52-configuration-applicationyml)
-   - [5.3 Secrets Management](#53-secrets-management)
-   - [5.4 URL Shortener Service](#54-url-shortener-service)
-   - [5.5 Redis Configuration](#55-redis-configuration)
-6. [Step 6: Infrastructure as Code (Terraform)](#step-6-infrastructure-as-code-terraform)
-   - [6.1 DynamoDB Table](#61-dynamodb-table)
-   - [6.2 AWS Lambda Function](#62-aws-lambda-function)
-   - [6.3 API Gateway](#63-api-gateway)
-   - [6.4 Redis (ElastiCache)](#64-redis-elasticache)
-   - [6.5 WAF (Rate Limiting)](#65-waf-rate-limiting)
-   - [6.6 Secrets Manager](#66-secrets-manager)
-   - [6.7 CloudFront](#67-cloudfront)
-   - [6.8 Outputs](#68-outputs)
-   - [6.9 Terraform File Structure](#69-terraform-file-structure)
-7. [Step 7: CI/CD Pipeline (GitHub Actions)](#step-7-cicd-pipeline-github-actions)
-   - [7.1 GitHub Actions Workflow File](#71-github-actions-workflow-file)
-   - [7.2 CI/CD Pipeline Steps Explained](#72-cicd-pipeline-steps-explained)
-   - [7.3 Directory Structure for GitHub Actions](#73-directory-structure-for-github-actions)
-   - [7.4 Required GitHub Secrets](#74-required-github-secrets)
-   - [7.5 Outputs and Monitoring](#75-outputs-and-monitoring)
-   - [7.6 Benefits of CI/CD Pipeline](#76-benefits-of-cicd-pipeline)
-8. [Step 8: Roadmap](#step-8-roadmap)
-9. [Step 9: Architecture Diagrams (Application and Infrastructure)](#step-9-architecture-diagrams-application-and-infrastructure)
-   - [9.1 Application Architecture Diagram](#91-application-architecture-diagram)
-   - [9.2 Infrastructure Diagram](#92-infrastructure-diagram)
-   - [9.3 Suggested Diagram Layout in draw.io](#93-suggested-diagram-layout-in-drawio)
-   - [9.4 Tools to Create the Diagrams](#94-tools-to-create-the-diagrams)
-10. [Step 10: Conclusion](#step-10-conclusion)
+1. [Introduction](#1-introduction)  
+2. [Architecture Overview](#2-architecture-overview)  
+3. [Design Patterns](#3-design-patterns)  
+4. [Code Implementation](#4-code-implementation)  
+   - [4.1 Dependencies (`pom.xml`)](#41-dependencies-pomxml)  
+   - [4.2 Configuration Properties (`application.yml`)](#42-configuration-properties-applicationyml)  
+   - [4.3 Secrets Management (`SecretsService.java`)](#43-secrets-management-secretsservicejava)  
+   - [4.4 URL Shortener Service (`UrlShortenerService.java`)](#44-url-shortener-service-urlshortenerservicejava)  
+   - [4.5 Redis Configuration (`RedisConfig.java`)](#45-redis-configuration-redisconfigjava)  
+   - [4.6 Controller Class (`UrlShortenerController.java`)](#46-controller-class-urlshortenercontrollerjava)  
+5. [Infrastructure as Code (Terraform)](#5-infrastructure-as-code-terraform)  
+   - [5.1 Terraform Folder Structure](#51-terraform-folder-structure)  
+   - [5.2 VPC Configuration + Endpoints](#52-vpc-configuration--endpoints)  
+   - [5.3 Network Configuration](#53-network-configuration)  
+   - [5.4 SSL Certificates with ACM](#54-ssl-certificates-with-acm)  
+   - [5.5 Application Load Balancer (ALB)](#55-application-load-balancer-alb)  
+   - [5.6 Domain Configuration](#56-domain-configuration)  
+   - [5.7 AWS WAF Configuration](#57-aws-waf-configuration)  
+   - [5.8 API Gateway](#58-api-gateway)  
+   - [5.9 AWS Lambda Function](#59-aws-lambda-function)  
+   - [5.10 DynamoDB Table](#510-dynamodb-table)  
+   - [5.11 Redis (ElastiCache)](#511-redis-elasticache)  
+   - [5.12 AWS Secrets Manager](#512-aws-secrets-manager)  
+   - [5.13 AWS CloudFront Configuration](#513-aws-cloudfront-configuration)  
+6. [CI/CD Pipeline](#6-cicd-pipeline)  
+7. [Steps to Run the Project](#7-steps-to-run-the-project)  
+8. [Roadmap](#8-roadmap)  
+9. [Architecture Diagrams](#9-architecture-diagrams)  
+10. [Conclusion](#10-conclusion)  
 
+---
 <br>
 
-# Step 1: Solution Overview
+## 1. Introduction
 
-The **URL Shortener Application** is a production-ready, secure, and scalable system built using **Java 21** and **Spring Boot 3**, leveraging modern cloud-native architecture and AWS services.
+The **URL Shortener Application** allows users to generate short URLs for long links, enabling seamless redirection while providing analytics and scalability. Key highlights include:
 
+- **Shorten URLs** and manage redirects.
+- **Caching**: Redis (AWS ElastiCache) ensures low-latency lookups.
+- **Persistence**: DynamoDB securely stores the URL mappings.
+- **Authentication**: Secures endpoints using OAuth2 (Google).
+- **Automation**: CI/CD pipeline with GitHub Actions and Terraform.
+- **ETL and Analytics**: AWS Glue and OpenSearch for metadata and usage statistics.
+
+This document outlines the application's **architecture**, key **design patterns**, **code implementation**, **deployment infrastructure**, and instructions for running the project locally or on AWS.
+
+---
 <br>
 
-# Step 2: Key Features
+## 2. Architecture Overview
 
-1. **Shorten URLs** and redirect users seamlessly.
-2. **Authentication**: Secure API access with **Google OAuth2**.
-3. **Caching**: Redis (AWS ElastiCache) ensures low-latency lookups.
-4. **Persistence**: DynamoDB for storing URL mappings and metadata.
-5. **Rate Limiting**: Prevent abuse using **AWS WAF**.
-6. **Secrets Management**: AWS Secrets Manager for secure credential storage and rotation.
-7. **Multi-Region Deployment**: High availability using **DynamoDB Global Tables**.
-8. **Monitoring**: AWS CloudWatch for dashboards, logs, and alarms.
-9. **ETL Pipelines**: AWS Glue extracts metadata and stores results in Amazon S3.
-10. **Edge Caching**: AWS CloudFront accelerates content delivery globally.
-11. **CI/CD Pipeline**: GitHub Actions automate infrastructure provisioning and Lambda deployments.
-12. **Analytics**: AWS OpenSearch visualizes usage data.
+The **URL Shortener Application** follows a cloud-native, serverless architecture using AWS services. This design ensures scalability, high availability, and low operational overhead.
 
+---
+
+### 2.1 High-Level Architecture
+
+1. **API Gateway**: Entry point for all HTTP requests. It routes incoming requests to AWS Lambda.
+2. **AWS Lambda**: Processes business logic, such as shortening URLs and managing redirects.
+3. **Redis (AWS ElastiCache)**: Provides low-latency caching for frequently accessed URL mappings.
+4. **DynamoDB**: Persistent NoSQL database for storing the mapping between short and long URLs.
+5. **AWS Secrets Manager**: Manages secure storage and retrieval of sensitive credentials.
+6. **AWS WAF**: Adds rate limiting and protects APIs against malicious traffic.
+7. **CloudFront**: Caches API responses globally to reduce latency and improve performance.
+8. **AWS Glue**: Extracts metadata for ETL processing and stores results in S3.
+9. **AWS OpenSearch**: Provides search and visualization of usage analytics.
+10. **AWS CloudWatch**: Monitors system health, logs, and metrics to provide observability.
+
+---
+
+### 2.2 Data Flow
+
+The following outlines how data flows through the system:
+
+1. **Request Handling**:
+   - A client sends a `POST` or `GET` request to the **API Gateway**.
+   - **API Gateway** routes the request to the appropriate **AWS Lambda** function.
+
+2. **Cache Lookup**:
+   - For retrieval operations, **AWS Lambda** first checks **Redis (ElastiCache)** for the shortened URL.
+   - If the URL exists in Redis, it is returned immediately.
+
+3. **Database Lookup**:
+   - If the URL is not found in Redis, Lambda fetches it from **DynamoDB** and updates Redis for future requests.
+
+4. **Short URL Creation**:
+   - For a `POST` request, a short URL is generated, stored in **DynamoDB**, and cached in **Redis**.
+
+5. **ETL Processing**:
+   - **AWS Glue** periodically extracts metadata (e.g., headers) from the original URLs.
+   - Processed data is stored in **Amazon S3**.
+
+6. **Analytics**:
+   - Metadata and usage data are indexed in **AWS OpenSearch** for visualization and reporting.
+
+7. **Monitoring**:
+   - **CloudWatch** logs all Lambda invocations, errors, and performance metrics.
+   - Alerts are configured for failures, high latency, or rate limiting breaches.
+
+---
+
+### 2.3 Diagram
+
+For a visual representation of the architecture:
+
+- **Use draw.io or Lucidchart** to create the diagram.
+- Key components to include:
+  - API Gateway → Lambda → Redis → DynamoDB
+  - Secrets Manager, WAF, CloudFront for supporting infrastructure.
+  - AWS Glue → S3 → OpenSearch for ETL pipelines and analytics.
+
+![alt text](image.png)
+
+---
+
+### Summary
+
+The architecture combines serverless computing with AWS managed services to deliver:
+
+1. **Scalability**: Handles increasing workloads using Lambda and DynamoDB.
+2. **Performance**: Redis caching and CloudFront reduce response times.
+3. **Security**: WAF protects APIs; Secrets Manager manages credentials.
+4. **Observability**: CloudWatch logs, metrics, and alarms provide full visibility.
+5. **Analytics**: AWS Glue and OpenSearch process and visualize usage data.
+
+---
 <br>
 
-# Step 3: Architecture
+## 3. Design Patterns
 
-### High-Level Architecture
+The application follows industry-standard **design patterns** to ensure modularity, scalability, and clean code architecture.
 
-- **API Gateway**: Entry point for all API requests.
-- **AWS Lambda**: Runs the Spring Boot 3 application.
-- **Redis (ElastiCache)**: Low-latency caching for shortened URLs.
-- **DynamoDB**: Persistent storage for URL mappings.
-- **AWS Glue**: Extracts metadata and stores results in S3 buckets.
-- **CloudFront**: Global caching for API responses.
-- **WAF**: Implements rate limiting to prevent abuse.
-- **Secrets Manager**: Manages secure credentials with rotation.
-- **CloudWatch**: Logs, metrics, and monitoring dashboards.
+---
 
-### Data Flow Diagram
+### 3.1 Singleton Pattern
 
-1. **Client Request**: The client sends a request to the API Gateway.
-2. **API Gateway**: Forwards the request to the appropriate AWS Lambda function.
-3. **Redis Cache**: Checks for a cached URL mapping to ensure low-latency response.
-4. **DynamoDB**: If not found in Redis, retrieves or stores the URL mappings.
-5. **AWS Glue**: Processes metadata for analysis periodically.
-6. **CloudFront**: Caches responses globally for reduced latency.
-7. **WAF**: Protects the application against abuse and rate limits traffic.
-8. **CloudWatch**: Monitors application metrics, logs, and alarms.
-9. **Secrets Manager**: Manages sensitive credentials securely.
+Ensures that only one instance of shared resources, such as clients and connections, is created and reused throughout the application.
 
-This architecture is designed for scalability, security, and high availability using AWS managed services.
+- **Use Case**: 
+  - Redis connection (`RedisTemplate`).
+  - DynamoDB client.
+- **Benefit**: Reduces overhead by managing resource initialization efficiently.
 
+---
+
+### 3.2 Builder Pattern
+
+Simplifies the creation of complex AWS SDK requests with a clean and fluent API for improved readability.
+
+- **Use Case**:
+  - Constructing **DynamoDB PutItem/GetItem requests**.
+  - Building structured requests for **AWS Secrets Manager**.
+- **Benefit**: Enhances maintainability and eliminates redundant request-building logic.
+
+---
+
+### 3.3 Factory Pattern
+
+Uses Spring Boot’s **Dependency Injection** to create and manage beans for shared resources.
+
+- **Use Case**:
+  - Instantiating Redis clients, DynamoDB clients, and service classes.
+- **Benefit**: Decouples object creation from the main application logic and improves testability.
+
+---
+
+### 3.4 Strategy Pattern
+
+Encapsulates multiple strategies for data access and storage, enabling flexible logic execution based on use cases.
+
+- **Use Case**: 
+  - **Cache-first strategy**:
+    - Attempt to retrieve data from **Redis** first.
+    - Fallback to **DynamoDB** if the cache misses.
+- **Benefit**: Improves performance by reducing database latency through caching.
+
+---
+
+### 3.5 Template Method Pattern
+
+Provides a common template for Redis operations while allowing for specific implementations.
+
+- **Use Case**: 
+  - Using `RedisTemplate` to simplify `GET`, `SET`, and expiry operations for URL lookups.
+- **Benefit**: Standardizes interactions with Redis and reduces code duplication.
+
+---
+
+### 3.6 Proxy Pattern
+
+The **API Gateway** acts as a proxy to forward incoming HTTP requests to the AWS Lambda function.
+
+- **Use Case**: Decouples the API consumer (clients) from the internal application logic.
+- **Benefit**: Improves scalability and adds a unified entry point for API management.
+
+---
+
+### 3.7 Observer Pattern
+
+**CloudWatch** acts as an observer, monitoring system health, metrics, and logs in real-time.
+
+- **Use Case**:
+  - Observing Lambda function metrics like invocation count, latency, and errors.
+  - Configuring CloudWatch alarms for failures or anomalies.
+- **Benefit**: Ensures proactive system monitoring and automated alerting.
+
+---
+
+### 3.8 Decorator Pattern
+
+Adds additional functionality, such as **security** and **rate limiting**, without modifying the core business logic.
+
+- **Use Case**: 
+  - AWS WAF applies rate limiting and IP filtering to secure the **API Gateway**.
+- **Benefit**: Enhances security transparently without changing existing logic.
+
+---
+
+### Summary
+
+The use of these design patterns ensures:
+
+1. **Scalability**: Patterns like **Strategy** and **Proxy** allow for flexible logic and clean architecture.
+2. **Maintainability**: Patterns such as **Singleton** and **Builder** simplify code structure and resource management.
+3. **Performance**: Patterns like **Cache-first (Strategy)** reduce latency and optimize database calls.
+4. **Security**: **Decorator Pattern** ensures security features (e.g., WAF) are applied seamlessly.
+5. **Observability**: **Observer Pattern** helps track metrics and maintain system health.
+
+---
 <br>
 
-# Step 4: Design Patterns
+## 4. Code Implementation
 
-The application utilizes several **design patterns** to ensure clean code architecture, scalability, and maintainability.
+This section provides the key components of the application, including dependencies, configurations, and core service classes.
 
-1. **Singleton Pattern**  
-   Ensures that only a single instance of resources like Redis and DynamoDB clients is created.  
-   - **Use Case**: RedisTemplate and DynamoDB client initialization.
+---
 
-2. **Builder Pattern**  
-   Simplifies the creation of AWS SDK requests using clean, readable code.  
-   - **Use Case**: Constructing DynamoDB and SecretsManager requests.
+### 4.1 Dependencies (`pom.xml`)
 
-3. **Factory Pattern**  
-   Leverages Spring Boot's Dependency Injection (DI) to instantiate services and manage object lifecycles.  
-   - **Use Case**: Injecting the RedisTemplate, DynamoDB client, and service classes.
+This project uses **Spring Boot 3**, **AWS SDK**, **Redis**, and **OAuth2** for Google authentication. The dependencies ensure all required functionalities are supported.
 
-4. **Strategy Pattern**  
-   Allows flexible implementation of multiple strategies for fetching or storing data.  
-   - **Use Case**: **Cache-first strategy** – Attempt to fetch data from Redis first; fallback to DynamoDB if the cache misses.
+Below is the content of `pom.xml` with the necessary dependencies:
 
-5. **Template Method Pattern**  
-   Provides an abstraction for Redis operations using Spring's `RedisTemplate`.  
-   - **Use Case**: Simplified interactions with Redis for `get`, `set`, and expiry management.
-
-6. **Proxy Pattern**  
-   The API Gateway acts as a proxy, forwarding incoming requests to the AWS Lambda function.  
-   - **Use Case**: Decouples clients from the internal application logic.
-
-7. **Observer Pattern**  
-   AWS CloudWatch observes and monitors logs, metrics, and application performance.  
-   - **Use Case**: Automatic notifications and alarms based on metrics and thresholds.
-
-8. **Decorator Pattern**  
-   AWS WAF adds additional functionality (rate limiting and request filtering) without modifying the core logic of the application.  
-   - **Use Case**: Protects APIs by adding security rules transparently.
-
-These design patterns enhance the code's structure, flexibility, and performance while adhering to best practices.
-
-<br>
-
-# Step 5: Code Implementation
-
-### 5.1 Dependencies (`pom.xml`)
 ```xml
 <dependencies>
-    <!-- Spring Boot Web -->
+    <!-- Spring Boot Web for REST API -->
     <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-web</artifactId>
     </dependency>
-    <!-- Spring Boot Data Redis -->
+
+    <!-- Spring Boot Data Redis for caching -->
     <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-data-redis</artifactId>
     </dependency>
+
     <!-- AWS SDK for DynamoDB -->
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>dynamodb</artifactId>
     </dependency>
+
     <!-- AWS SDK for Secrets Manager -->
     <dependency>
         <groupId>software.amazon.awssdk</groupId>
         <artifactId>secretsmanager</artifactId>
     </dependency>
-    <!-- Spring Boot OAuth2 Client -->
+
+    <!-- Spring Boot OAuth2 Client for Google Authentication -->
     <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-oauth2-client</artifactId>
     </dependency>
+
     <!-- Jackson for JSON handling -->
     <dependency>
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
     </dependency>
+
+    <!-- Spring Boot Starter for Testing -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-test</artifactId>
+        <scope>test</scope>
+    </dependency>
 </dependencies>
 ```
 
-### 5.2 Configuration (`application.yml`)
-```yaml
+#### Explanation:
+
+1. **Spring Boot Starter Web**: Enables RESTful web services for API endpoints.
+2. **Spring Boot Data Redis**: Provides caching capabilities for optimized URL lookups.
+3. **AWS SDK for DynamoDB and Secrets Manager**: Interacts with AWS DynamoDB for persistent storage and Secrets Manager for secure credential retrieval.
+4. **OAuth2 Client**: Supports Google Authentication for securing API endpoints.
+5. **Jackson Databind**: Handles JSON serialization and deserialization.
+6. **Spring Boot Starter Test**: Supports testing capabilities for unit tests and integration tests.
+
+---
+
+### 4.2 Configuration Properties (`application.yml`)
+
+The **`application.yml`** file centralizes all application configurations, ensuring clean and maintainable code.
+
+````yaml
 app:
-  base-url: https://enok.tech/shorten-url
+  base-url: https://enok.tech/shortener
 
 aws:
   dynamodb:
     table-name: URLMappings
   secrets:
-    name: url-shortener/secrets
+    name: shortener/secrets
   region: us-east-1
 
 spring:
   redis:
-    host: localhost
-    port: 6379
+    host: ${REDIS_HOST:redis.shortener-enok.tech}
+    port: ${REDIS_PORT:6379}
     timeout: 2000ms
-```
+````
 
-### 5.3 Secrets Management
+---
+
+#### Explanation:
+
+1. **`app.base-url`**:  
+   - Defines the base URL for the application endpoints.  
+   - This ensures all URL generation within the application uses a consistent base (`https://enok.tech/shortener`).
+
+2. **`aws.dynamodb.table-name`**:  
+   - Specifies the DynamoDB table used for storing the URL mappings.
+
+3. **`aws.secrets.name`**:  
+   - Path to the AWS Secrets Manager secret (`shortener/secrets`) where sensitive credentials like Redis host, port, and DynamoDB table name are stored.
+
+4. **`aws.region`**:  
+   - Defines the AWS region where resources like DynamoDB, ElastiCache, and Secrets Manager are provisioned.
+
+5. **`spring.redis.host`**:  
+   - Custom DNS endpoint `redis.shortener-enok.tech` created in GoDaddy as a CNAME record pointing to the AWS ElastiCache Redis endpoint.
+
+6. **`spring.redis.port`**:  
+   - The Redis port, defaulting to `6379`.
+
+7. **`spring.redis.timeout`**:  
+   - Timeout configuration for Redis operations, set to `2000ms` (2 seconds) for responsiveness.
+
+---
+
+The **`application.yml`** structure ensures that environment-specific configurations, such as Redis host, AWS resource names, and API base URLs, are organized and easily maintainable.
+
+---
+
+### 4.3 Secrets Management (`SecretsService.java`)
+
+The `SecretsService` class retrieves secure credentials, such as database usernames and passwords, from **AWS Secrets Manager**.
+
 ```java
-package com.example.shortener.service;
+package tech.enok.shortener.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -220,10 +378,11 @@ import java.util.Map;
 
 @Service
 public class SecretsService {
+
     private final SecretsManagerClient secretsClient;
 
-    public SecretsService() {
-        this.secretsClient = SecretsManagerClient.builder().build();
+    public SecretsService(SecretsManagerClient secretsClient) {
+        this.secretsClient = secretsClient;
     }
 
     public Map<String, String> getSecrets(String secretName) {
@@ -231,18 +390,37 @@ public class SecretsService {
                 .secretId(secretName)
                 .build();
         String secretString = secretsClient.getSecretValue(request).secretString();
+
         try {
             return new ObjectMapper().readValue(secretString, Map.class);
         } catch (Exception e) {
-            throw new RuntimeException("Error parsing secrets from AWS Secrets Manager", e);
+            throw new RuntimeException("Error retrieving secrets from AWS Secrets Manager", e);
         }
     }
 }
 ```
 
-### 5.4 URL Shortener Service
+#### Explanation:
+
+1. **SecretsManagerClient**: AWS SDK client used to connect to AWS Secrets Manager.
+2. **getSecrets(String secretName)**:
+   - Retrieves the secret by its name (`secretId`) from AWS Secrets Manager.
+   - Parses the response (`secretString`) as a JSON string and converts it to a `Map` using Jackson’s `ObjectMapper`.
+3. **Error Handling**: Ensures that parsing or retrieval errors are gracefully handled with a `RuntimeException`.
+
+#### Benefits:
+- **Security**: Keeps sensitive credentials (e.g., database passwords) secure and out of the codebase.
+- **Seamless Updates**: Allows credentials to be updated in Secrets Manager without redeploying the application.
+- **Integration**: AWS SDK provides built-in support for Secrets Manager, making it easy to integrate.
+
+---
+
+### 4.4 URL Shortener Service (`UrlShortenerService.java`)
+
+The `UrlShortenerService` handles the core logic for generating short URLs, storing them, and managing redirection. It uses Redis for caching and DynamoDB for persistent storage.
+
 ```java
-package com.example.shortener.service;
+package tech.enok.shortener.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -253,7 +431,6 @@ import software.amazon.awssdk.services.dynamodb.model.*;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 
 @Service
 public class UrlShortenerService {
@@ -269,22 +446,30 @@ public class UrlShortenerService {
 
     public String shortenUrl(String longUrl) {
         String shortUrl = UUID.randomUUID().toString().substring(0, 8);
-        CompletableFuture.runAsync(() -> storeMapping(shortUrl, longUrl));
+        storeMapping(shortUrl, longUrl);
         return String.format("%s/%s", baseUrl, shortUrl);
     }
 
     public String getLongUrl(String shortUrl) {
+        // Check Redis cache first
         String cachedUrl = redisTemplate.opsForValue().get(shortUrl);
-        return cachedUrl != null ? cachedUrl : fetchFromDynamoDB(shortUrl);
+        if (cachedUrl != null) {
+            return cachedUrl;
+        }
+        // Fallback to DynamoDB
+        return fetchFromDynamoDB(shortUrl);
     }
 
     private void storeMapping(String shortUrl, String longUrl) {
+        // Store in Redis cache
         redisTemplate.opsForValue().set(shortUrl, longUrl);
+        // Persist to DynamoDB
         dynamoDbClient.putItem(PutItemRequest.builder()
                 .tableName("URLMappings")
                 .item(Map.of(
                         "shortUrl", AttributeValue.builder().s(shortUrl).build(),
-                        "longUrl", AttributeValue.builder().s(longUrl).build()))
+                        "longUrl", AttributeValue.builder().s(longUrl).build()
+                ))
                 .build());
     }
 
@@ -293,15 +478,54 @@ public class UrlShortenerService {
                 .tableName("URLMappings")
                 .key(Map.of("shortUrl", AttributeValue.builder().s(shortUrl).build()))
                 .build());
-        return response.hasItem() ? response.item().get("longUrl").s() : null;
+
+        if (response.hasItem()) {
+            String longUrl = response.item().get("longUrl").s();
+            redisTemplate.opsForValue().set(shortUrl, longUrl); // Cache the result
+            return longUrl;
+        }
+        return null;
     }
 }
 ```
 
-### 5.5 Redis Configuration
-```java
-package com.example.shortener.config;
+#### Explanation:
 
+1. **shortenUrl(String longUrl)**:
+   - Generates a short URL by creating a random 8-character string using `UUID`.
+   - Stores the mapping of `shortUrl` → `longUrl` in both Redis (cache) and DynamoDB (persistent storage).
+   - Returns the complete shortened URL (e.g., `https://enok.tech/shortener/<shortId>`).
+
+2. **getLongUrl(String shortUrl)**:
+   - Checks **Redis** first to see if the `shortUrl` exists in the cache.
+   - If not found, queries **DynamoDB** to retrieve the `longUrl`.
+   - Updates Redis with the retrieved URL for future lookups.
+
+3. **storeMapping(String shortUrl, String longUrl)**:
+   - Adds the short-to-long URL mapping to:
+     - **Redis** for fast access.
+     - **DynamoDB** for persistent storage.
+
+4. **fetchFromDynamoDB(String shortUrl)**:
+   - Queries DynamoDB to fetch the `longUrl` corresponding to the given `shortUrl`.
+   - Updates Redis with the result to optimize future lookups.
+
+#### Key Features:
+- **Caching**: Reduces latency with Redis for frequent lookups.
+- **Persistence**: DynamoDB ensures the mappings are durable and highly available.
+- **Efficiency**: Implements a **cache-first strategy** to optimize performance.
+- **Scalability**: Works efficiently under high traffic with serverless architecture.
+
+---
+
+### 4.5 Redis Configuration (`RedisConfig.java`)
+
+The Redis configuration integrates with AWS ElastiCache Redis for caching frequently accessed URL mappings. The connection details are managed dynamically through `application.yml` and AWS Secrets Manager.
+
+````java
+package tech.enok.shortener.config;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
@@ -311,9 +535,15 @@ import org.springframework.data.redis.core.RedisTemplate;
 @Configuration
 public class RedisConfig {
 
+    @Value("${spring.redis.host}")
+    private String redisHost;
+
+    @Value("${spring.redis.port}")
+    private int redisPort;
+
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
-        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration("localhost", 6379);
+        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(redisHost, redisPort);
         return new LettuceConnectionFactory(config);
     }
 
@@ -324,13 +554,339 @@ public class RedisConfig {
         return template;
     }
 }
+````
+
+---
+
+#### Explanation:
+
+1. **`@Value("${spring.redis.host}")` and `@Value("${spring.redis.port}")`**:  
+   - Dynamically retrieves the Redis host and port from the `application.yml` configuration.  
+   - Host: `redis.shortener-enok.tech`  
+   - Port: `6379`
+
+2. **`RedisStandaloneConfiguration`**:  
+   - Configures a standalone Redis instance connection using the provided host and port.
+
+3. **`LettuceConnectionFactory`**:  
+   - Provides a Redis connection factory using the **Lettuce** client for Spring Data Redis.  
+   - This factory is lightweight and thread-safe, ensuring efficient connections.
+
+4. **`RedisTemplate<String, String>`**:  
+   - A utility class that simplifies Redis operations.  
+   - Handles common tasks such as storing and retrieving string-based keys and values.
+
+5. **Dynamic Configuration**:  
+   - The Redis host and port are dynamically loaded from `application.yml`, which makes it easy to switch environments (e.g., local, staging, production).
+
+6. **Custom Redis Endpoint**:  
+   - The host `redis.shortener-enok.tech` is a **CNAME** pointing to the AWS ElastiCache endpoint.  
+   - This approach abstracts the AWS-specific hostname and provides a clean, human-readable DNS name.
+
+---
+
+#### Benefits:
+
+1. **Low-Latency Caching**:  
+   - Redis significantly reduces response times by caching frequently accessed URL mappings, improving performance.
+
+2. **Dynamic Configuration**:  
+   - The host and port are configurable through `application.yml` and AWS Secrets Manager, making it easy to adapt across environments.
+
+3. **Scalable Architecture**:  
+   - AWS ElastiCache can scale horizontally and vertically, ensuring high availability under heavy traffic loads.
+
+4. **Clean Abstraction**:  
+   - Using a custom DNS (`redis.shortener-enok.tech`) abstracts the backend infrastructure, allowing seamless upgrades or migrations.
+
+5. **Maintainability**:  
+   - `RedisTemplate` simplifies interactions with Redis, making it easier to implement caching logic without boilerplate code.
+
+6. **Thread-Safe Connections**:  
+   - The **LettuceConnectionFactory** ensures efficient and thread-safe connections to Redis.
+
+7. **Improved Reliability**:  
+   - By using AWS-managed Redis (ElastiCache), the system benefits from automatic backups, failovers, and monitoring.
+
+---
+
+By leveraging **Spring Data Redis** and AWS ElastiCache with a custom DNS endpoint, the application achieves improved **performance**, **scalability**, and **maintainability** for URL caching.
+
+---
+
+### 4.6 Controller Class (`UrlShortenerController.java`)
+
+The **Controller Class** manages HTTP requests to shorten URLs and retrieve original URLs. It maps the endpoints to ensure they align with the **API Gateway configuration** and the **application.yml** properties.
+
+```java
+package tech.enok.shortener.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import tech.enok.shortener.service.UrlShortenerService;
+
+@RestController
+@RequestMapping("/shortener")
+public class UrlShortenerController {
+
+    @Autowired
+    private UrlShortenerService urlShortenerService;
+
+    /**
+     * Endpoint to shorten a given long URL.
+     * Matches API Gateway: POST /shortener/shorten
+     * 
+     * @param longUrl - Original long URL sent in the request body.
+     * @return Shortened URL.
+     */
+    @PostMapping("/shorten")
+    public ResponseEntity<String> shortenUrl(@RequestBody String longUrl) {
+        String shortUrl = urlShortenerService.shortenUrl(longUrl);
+        return ResponseEntity.ok(shortUrl);
+    }
+
+    /**
+     * Endpoint to redirect to the original long URL.
+     * Matches API Gateway: GET /shortener/{shortUrlId}
+     * 
+     * @param shortUrlId - Unique identifier for the shortened URL.
+     * @return Redirect to the long URL with HTTP status 302 (Found).
+     */
+    @GetMapping("/{shortUrlId}")
+    public ResponseEntity<Void> redirectToLongUrl(@PathVariable String shortUrlId) {
+        String longUrl = urlShortenerService.getLongUrl(shortUrlId);
+        if (longUrl != null) {
+            return ResponseEntity.status(302).header("Location", longUrl).build();
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}
+
 ```
 
+#### Key Highlights:
+
+1. **Class-level Mapping**:  
+   - **`@RequestMapping("/shortener")`**: Ensures that all endpoints under this controller are prefixed with `/shortener`.
+
+2. **POST Endpoint: `/shortener/shorten`**  
+   - **`@PostMapping("/shorten")`**:  
+     - Matches the API Gateway route **`POST /shortener/shorten`**.
+     - Accepts a long URL in the request body.
+     - Returns a shortened URL generated by the service.
+
+3. **GET Endpoint: `/shortener/{shortUrlId}`**  
+   - **`@GetMapping("/{shortUrlId}")`**:  
+     - Matches the API Gateway route **`GET /shortener/{shortUrlId}`**.
+     - Extracts the short URL ID as a path variable.
+     - Returns a **302 Redirect** with the long URL if it exists, or **404 Not Found** otherwise.
+
+4. **Integration with Service**:  
+   - Uses the `UrlShortenerService` to:
+     - **shortenUrl(longUrl)**: Generate a shortened URL.
+     - **getLongUrl(shortUrlId)**: Retrieve the original long URL from DynamoDB or Redis.
+
+5. **HTTP Status Codes**:
+   - **200 OK**: For successful short URL generation.
+   - **302 Found**: Redirects users to the original long URL.
+   - **404 Not Found**: If the short URL ID does not exist.
+
+#### Benefits:
+1. **Consistency**: Aligns perfectly with API Gateway, Lambda integration, and the base URL in `application.yml`.
+2. **Clean Code**: Separates HTTP concerns into the controller and business logic into the service layer.
+3. **RESTful Design**: Adheres to REST conventions for POST and GET methods.
+4. **Extensibility**: Easily extendable for additional features (e.g., analytics or deletion of short URLs).
+
+---
+
+#### Example Requests:
+
+1. **Shorten URL**:
+   - **Request**:  
+     ```http
+     POST /shortener/shorten
+     Content-Type: application/json
+
+     https://www.youtube.com/watch?v=dQw4w9WgXcQ
+     ```
+   - **Response**:  
+     ```json
+     "https://enok.tech/shortener/abcd1234"
+     ```
+
+2. **Redirect to Original URL**:
+   - **Request**:  
+     ```http
+     GET /shortener/abcd1234
+     ```
+   - **Response**:  
+     HTTP Status **302** with Header:  
+     ```http
+     Location: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+     ```
+
+3. **Invalid Short URL**:
+   - **Request**:  
+     ```http
+     GET /shortener/invalid123
+     ```
+   - **Response**:  
+     HTTP Status **404 Not Found**.
+
+---
 <br>
 
-# Step 6: Infrastructure as Code (Terraform)
+## **5. Infrastructure as Code (Terraform)**
 
-### 6.1 DynamoDB Table
+The following sections outline each resource created for the **URL Shortener Application** using **Terraform**. By defining infrastructure as code, we ensure consistency, automation, and ease of deployment for all AWS resources.
+
+---
+
+### **5.1 Terraform Folder Structure**
+
+To ensure clarity, maintainability, and modularity, the Terraform resources for the **URL Shortener Application** are organized into the following structure:
+
+```
+terraform/
+│
+├── main.tf                 # Core Terraform resources for AWS Lambda, DynamoDB, API Gateway
+├── vpc.tf                  # VPC Configuration + Endpoints
+├── network.tf              # Network Configuration (subnets, security groups, route tables)
+├── ssl.tf                  # SSL Certificates with ACM
+├── alb.tf                  # Application Load Balancer (ALB) configuration
+├── domain.tf               # Domain Configuration (Route53 setup)
+├── waf.tf                  # AWS WAF Configuration for rate limiting
+├── apigateway.tf           # API Gateway resource configuration
+├── lambda.tf               # AWS Lambda Function definition
+├── dynamodb.tf             # DynamoDB Table setup
+├── redis.tf                # Redis (ElastiCache) configuration
+├── secrets_manager.tf      # AWS Secrets Manager for secure credentials
+├── cloudfront.tf           # AWS CloudFront Configuration for global caching
+├── outputs.tf              # Outputs for resource endpoints and ARNs
+├── variables.tf            # Configuration variables for reusability
+├── provider.tf             # AWS provider and Terraform backend configuration
+└── backend.tf              # Optional: Remote backend configuration (S3 bucket for state)
+```
+
+---
+
+### **Explanation**
+
+1. **`main.tf`**:  
+   - Defines core resources such as AWS Lambda, DynamoDB, and API Gateway.
+
+2. **`vpc.tf`**:  
+   - Creates the Virtual Private Cloud (VPC) and VPC Endpoints for DynamoDB, Secrets Manager, and S3.
+
+3. **`network.tf`**:  
+   - Configures public and private subnets, security groups, route tables, and network ACLs.
+
+4. **`ssl.tf`**:  
+   - Requests and manages SSL certificates using AWS Certificate Manager (ACM).
+
+5. **`alb.tf`**:  
+   - Configures the Application Load Balancer (ALB) to manage incoming traffic to the application.
+
+6. **`domain.tf`**:  
+   - Manages custom domain configurations using AWS Route 53.
+
+7. **`waf.tf`**:  
+   - Sets up AWS WAF to protect APIs with rate limiting and security rules.
+
+8. **`apigateway.tf`**:  
+   - Defines API Gateway resources, including routes and integrations with Lambda.
+
+9. **`lambda.tf`**:  
+   - Configures AWS Lambda function, including environment variables, permissions, and deployment settings.
+
+10. **`dynamodb.tf`**:  
+    - Creates and configures the DynamoDB table for persistent storage of URL mappings.
+
+11. **`redis.tf`**:  
+    - Sets up ElastiCache Redis in private subnets for low-latency caching.
+
+12. **`secrets_manager.tf`**:  
+    - Manages secure credentials using AWS Secrets Manager, including secret rotation policies.
+
+13. **`cloudfront.tf`**:  
+    - Configures AWS CloudFront to provide global caching for API Gateway responses.
+
+14. **`outputs.tf`**:  
+    - Defines Terraform outputs to display important endpoints, such as API Gateway URLs and resource ARNs.
+
+15. **`variables.tf`**:  
+    - Stores reusable configuration variables, reducing redundancy across files.
+
+16. **`provider.tf`**:  
+    - Configures the AWS provider and credentials to enable Terraform to interact with AWS.
+
+17. **`backend.tf`** *(Optional)*:  
+    - Sets up a remote backend (e.g., S3 bucket) for Terraform state files to ensure consistency and collaboration.
+
+---
+
+### **Benefits**
+
+1. **Modularity**:  
+   - Each Terraform file focuses on a specific resource, improving readability and maintainability.
+
+2. **Reusability**:  
+   - Common configurations, like variables and outputs, are centralized to reduce duplication.
+
+3. **Automation**:  
+   - Terraform automates resource provisioning, ensuring consistent and repeatable deployments.
+
+4. **Scalability**:  
+   - The modular structure allows for the addition of new AWS resources without affecting existing configurations.
+
+5. **Collaboration**:  
+   - Version-controlled Terraform files enable teams to collaborate effectively.
+
+6. **Consistency**:  
+   - The structure aligns with AWS best practices and provides clear organization for infrastructure resources.
+
+---
+
+### **Next Steps**
+
+Proceed to **Step 5.2 (VPC Configuration + Endpoints)** to define the Virtual Private Cloud (VPC) and integrate endpoints for DynamoDB, S3, and Secrets Manager.
+
+---
+
+
+
+
+
+
+
+
+
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### 5.1 DynamoDB Table
+
+The **DynamoDB Table** is used to store the mappings of short URLs to their corresponding long URLs. This ensures persistent and highly available storage.
+
 ```hcl
 resource "aws_dynamodb_table" "url_mapping" {
   name         = "URLMappings"
@@ -353,33 +909,88 @@ resource "aws_dynamodb_table" "url_mapping" {
 }
 ```
 
-### 6.2 AWS Lambda Function
+#### Explanation:
+
+1. **name**: Sets the table name to `URLMappings`.
+2. **billing_mode**: Uses `PAY_PER_REQUEST` mode, ensuring cost-efficiency with on-demand capacity instead of pre-provisioned capacity.
+3. **hash_key**: Defines `shortUrl` as the primary key for the table.
+4. **attribute**:
+   - Specifies the `shortUrl` attribute with the data type `S` (String).
+5. **server_side_encryption**:
+   - **enabled = true**: Encrypts all data stored in DynamoDB for security.
+6. **tags**:
+   - Adds metadata for resource management, such as `Name` and `Environment`.
+
+#### Benefits:
+- **High Availability**: DynamoDB automatically replicates data across multiple availability zones.
+- **Cost-Effective**: On-demand billing ensures you only pay for what you use.
+- **Scalability**: DynamoDB can scale seamlessly to handle growing traffic.
+- **Security**: Server-side encryption ensures data confidentiality.
+
+---
+
+### 5.2 AWS Lambda Function
+
+The **AWS Lambda Function** hosts and executes the core logic of the **Shortener Application**. The code is packaged as a JAR file and deployed to AWS Lambda.
+
 ```hcl
 resource "aws_lambda_function" "url_shortener_lambda" {
   function_name = "url-shortener-lambda"
   runtime       = "java21"
-  handler       = "com.example.shortener.LambdaHandler::handleRequest"
+  handler       = "tech.enok.shortener.LambdaHandler::handleRequest"
   role          = aws_iam_role.lambda_exec_role.arn
 
-  s3_bucket = "your-s3-bucket-name"
-  s3_key    = "lambda/url-shortener.jar"
+  s3_bucket = "shortener-app-bucket"
+  s3_key    = "lambda/shortener.jar"
 
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.url_mapping.name
-      APP_BASE_URL        = "https://enok.tech/shorten-url"
+      APP_BASE_URL        = "https://enok.tech/shortener"
     }
   }
 
   tags = {
-    Name        = "UrlShortenerLambda"
+    Name        = "ShortenerLambda"
     Environment = "Production"
   }
 }
-
 ```
 
-### 6.3 API Gateway
+#### Explanation:
+
+1. **function_name**: The name of the Lambda function (`url-shortener-lambda`).
+2. **runtime**: Specifies `java21` as the runtime environment for executing the JAR file.
+3. **handler**:
+   - Entry point of the Lambda function in the packaged code (`tech.enok.shortener.LambdaHandler::handleRequest`).
+   - Root package is `tech.enok.shortener` to maintain project organization.
+4. **role**:
+   - References an **IAM role** (`lambda_exec_role`) that grants permissions for AWS resources like DynamoDB and Secrets Manager.
+5. **s3_bucket** and **s3_key**:
+   - Code is stored in an S3 bucket (`shortener-app-bucket`).
+   - JAR file location is updated to `lambda/shortener.jar`.
+6. **environment.variables**:
+   - `DYNAMODB_TABLE_NAME`: References the DynamoDB table name (`URLMappings`).
+   - `APP_BASE_URL`: Base URL for the shortened links (`https://enok.tech/shortener`).
+7. **tags**:
+   - Updates the resource metadata to reflect the new application name: **"ShortenerLambda"**.
+
+#### Updates:
+- **Repository**: The code will be hosted at `https://github.com/enok/shortener`.
+- **Naming Consistency**: Updated naming for Lambda and S3 path to match "shortener".
+- **Base URL**: Adjusted to `https://enok.tech/shortener` for consistency.
+
+#### Benefits:
+- **Clear Organization**: Updated paths, S3 buckets, and handler names align with the repository structure.
+- **Consistency**: Unified naming (`shortener`) across code, infrastructure, and URLs.
+- **Flexibility**: Environment variables can be updated without modifying the code.
+
+---
+
+### 5.3 API Gateway
+
+The **API Gateway** serves as the entry point for the application, routing HTTP requests to the AWS Lambda function. It exposes RESTful endpoints for shortening URLs and handling redirection.
+
 ```hcl
 resource "aws_apigatewayv2_api" "api_gateway" {
   name          = "url-shortener-api"
@@ -397,12 +1008,65 @@ resource "aws_apigatewayv2_integration" "lambda_integration" {
   integration_type = "AWS_PROXY"
   integration_uri  = aws_lambda_function.url_shortener_lambda.invoke_arn
 }
+
+resource "aws_apigatewayv2_route" "shorten_route" {
+  api_id    = aws_apigatewayv2_api.api_gateway.id
+  route_key = "POST /shortener/shorten"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+}
+
+resource "aws_apigatewayv2_route" "redirect_route" {
+  api_id    = aws_apigatewayv2_api.api_gateway.id
+  route_key = "GET /shortener/{shortUrlId}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda_integration.id}"
+}
 ```
 
-### 6.4 Redis (ElastiCache)
+#### Explanation:
+
+1. **API Definition**:
+   - **aws_apigatewayv2_api**: Creates an HTTP API Gateway named `url-shortener-api`.
+   - **protocol_type = "HTTP"**: Specifies that this is an HTTP-based API.
+
+2. **Stage**:
+   - **aws_apigatewayv2_stage**: Deploys the API to the `prod` stage and enables automatic deployment.
+
+3. **Integration**:
+   - **aws_apigatewayv2_integration**:
+     - Integrates the API Gateway with the AWS Lambda function (`url-shortener-lambda`).
+     - Uses **AWS_PROXY** mode to forward the full request to Lambda.
+
+4. **Routes**:
+   - **shorten_route** (`POST /shortener/shorten`):
+     - Handles the API endpoint for shortening URLs.
+     - Calls the Lambda function to generate a shortened URL.
+   - **redirect_route** (`GET /shortener/{shortUrlId}`):
+     - Handles the redirection logic.
+     - Extracts `shortUrlId` from the path and forwards the request to Lambda.
+
+5. **Route Key**:
+   - Defines the HTTP method (`POST` or `GET`) and path (`/shortener/...`) for each route.
+
+#### Benefits:
+- **Centralized Entry Point**: API Gateway simplifies request handling and integrates seamlessly with AWS Lambda.
+- **RESTful API**: Exposes clean, standardized endpoints (`POST /shortener/shorten` and `GET /shortener/{shortUrlId}`).
+- **Scalability**: API Gateway automatically scales with traffic.
+- **Flexibility**: Routes can be extended to include additional endpoints in the future.
+- **Repository**: Code integration aligns with `https://github.com/enok/shortener`.
+
+#### Exposed Endpoints:
+1. **POST** → `https://<api-gateway-id>.execute-api.<region>.amazonaws.com/prod/shortener/shorten`
+2. **GET** → `https://<api-gateway-id>.execute-api.<region>.amazonaws.com/prod/shortener/{shortUrlId}`
+
+---
+
+### 5.4 Redis (ElastiCache)
+
+The **Redis Cluster** (AWS ElastiCache) is used as a caching layer to speed up lookups for shortened URLs, reducing latency and DynamoDB reads.
+
 ```hcl
 resource "aws_elasticache_cluster" "redis_cluster" {
-  cluster_id           = "url-shortener-redis"
+  cluster_id           = "shortener-redis-cluster"
   engine               = "redis"
   node_type            = "cache.t2.micro"
   num_cache_nodes      = 1
@@ -410,15 +1074,336 @@ resource "aws_elasticache_cluster" "redis_cluster" {
   parameter_group_name = "default.redis6.x"
 
   tags = {
-    Name        = "UrlShortenerRedis"
+    Name        = "ShortenerRedis"
     Environment = "Production"
   }
 }
 ```
-### 6.5 WAF (Rate Limiting)
-```hcl
-resource "aws_wafv2_web_acl" "waf_rate_limit" {
-  name  = "url-shortener-waf"
+
+#### Explanation:
+
+1. **cluster_id**:  
+   - The name of the Redis cluster is `shortener-redis-cluster`.
+
+2. **engine**:  
+   - Specifies `redis` as the caching engine.
+
+3. **node_type**:  
+   - Uses `cache.t2.micro`, a cost-effective instance type suitable for testing and light workloads.  
+   - Can be upgraded to higher instance types as the application scales.
+
+4. **num_cache_nodes**:  
+   - Sets up a single Redis node. For production, multiple nodes can be configured for redundancy.
+
+5. **port**:  
+   - The default Redis port is `6379`.
+
+6. **parameter_group_name**:  
+   - Uses the default Redis 6.x parameter group for configuration.
+
+7. **tags**:  
+   - Adds metadata for resource identification:  
+     - `Name`: **ShortenerRedis**  
+     - `Environment`: **Production**
+
+#### Benefits:
+- **Performance**: Reduces latency by caching frequently accessed short URL lookups.
+- **Cost Efficiency**: Decreases DynamoDB read costs by serving cached results.
+- **Scalability**: Redis can scale vertically or horizontally to accommodate growing traffic.
+- **Persistence**: Configurable to support Redis persistence if required in the future.
+
+#### Use in Application:
+- **Cache-first Strategy**:  
+   - Lookup short URLs in Redis first.  
+   - If not found, fetch from DynamoDB and update the Redis cache.
+
+#### Connection:
+- Connect to Redis using the **host** and **port** of the ElastiCache cluster.
+- In production, use security groups to restrict access to the Redis endpoint.
+
+---
+
+### 5.5 AWS Secrets Manager
+
+The **AWS Secrets Manager** securely stores and retrieves sensitive credentials, such as Redis host, Redis port, and DynamoDB table name. This eliminates the need to hardcode sensitive values in the application.
+
+````hcl
+resource "aws_secretsmanager_secret" "url_shortener_secrets" {
+  name = "shortener/secrets"
+
+  tags = {
+    Name        = "ShortenerSecrets"
+    Environment = "Production"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "url_shortener_secrets_version" {
+  secret_id     = aws_secretsmanager_secret.url_shortener_secrets.id
+  secret_string = jsonencode({
+    redisHost = "redis.shortener-enok.tech",
+    redisPort = "6379",
+    dbTable   = "URLMappings"
+  })
+}
+````
+
+---
+
+#### Explanation:
+
+1. **`aws_secretsmanager_secret`**:  
+   - Creates a new secret in AWS Secrets Manager under the name **`shortener/secrets`**.
+
+2. **`aws_secretsmanager_secret_version`**:  
+   - Stores the actual secret as a JSON string in AWS Secrets Manager.  
+   - Example JSON:
+     ```json
+     {
+       "redisHost": "redis.shortener-enok.tech",
+       "redisPort": "6379",
+       "dbTable": "URLMappings"
+     }
+     ```
+
+3. **Tags**:  
+   - Adds metadata for the secret:
+     - **Name**: ShortenerSecrets
+     - **Environment**: Production.
+
+4. **Custom Redis Endpoint**:  
+   - Uses the DNS name `redis.shortener-enok.tech`, which is a CNAME pointing to the AWS ElastiCache Redis instance.
+
+---
+
+#### Integration in the Application:
+
+The secrets are dynamically fetched at runtime using the `SecretsService`.
+
+````java
+package tech.enok.shortener.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+import software.amazon.awssdk.services.secretsmanager.SecretsManagerClient;
+import software.amazon.awssdk.services.secretsmanager.model.GetSecretValueRequest;
+
+import java.util.Map;
+
+@Service
+public class SecretsService {
+
+    private final SecretsManagerClient secretsClient;
+
+    public SecretsService() {
+        this.secretsClient = SecretsManagerClient.builder().build();
+    }
+
+    public Map<String, String> getSecrets(String secretName) {
+        GetSecretValueRequest request = GetSecretValueRequest.builder()
+                .secretId(secretName)
+                .build();
+
+        String secretString = secretsClient.getSecretValue(request).secretString();
+
+        try {
+            return new ObjectMapper().readValue(secretString, Map.class);
+        } catch (Exception e) {
+            throw new RuntimeException("Error parsing secrets from AWS Secrets Manager", e);
+        }
+    }
+}
+````
+
+---
+
+#### application.yml Configuration:
+
+````yaml
+aws:
+  secrets:
+    name: shortener/secrets
+
+spring:
+  redis:
+    host: ${REDIS_HOST:redis.shortener-enok.tech}
+    port: ${REDIS_PORT:6379}
+````
+
+---
+
+#### Example Secrets JSON:
+
+This is how the secrets are stored in AWS Secrets Manager:
+
+````json
+{
+  "redisHost": "redis.shortener-enok.tech",
+  "redisPort": "6379",
+  "dbTable": "URLMappings"
+}
+````
+
+---
+
+#### Benefits:
+
+1. **Secure Credential Storage**:  
+   - Secrets are encrypted and stored securely in AWS Secrets Manager.
+
+2. **Dynamic Retrieval**:  
+   - Secrets are fetched dynamically at runtime, avoiding hardcoded values in code or configuration files.
+
+3. **Automatic Rotation**:  
+   - AWS Secrets Manager supports automatic rotation of credentials, enhancing security.
+
+4. **Environment-Specific Configurations**:  
+   - Use different secrets for development, staging, and production environments.
+
+5. **Simplified Management**:  
+   - Updates to secrets in AWS do not require changes in application code.
+
+6. **Custom Redis Endpoint**:  
+   - Integrates with the user-friendly DNS name `redis.shortener-enok.tech`, abstracting the underlying AWS ElastiCache endpoint.
+
+7. **Auditing**:  
+   - AWS Secrets Manager logs all access to secrets, making it easier to monitor usage and comply with security requirements.
+
+8. **Scalability and Reliability**:  
+   - AWS Secrets Manager is fully managed, ensuring high availability and secure access.
+
+---
+
+By using **AWS Secrets Manager**, the application achieves **secure, scalable, and manageable handling of sensitive credentials**, ensuring minimal risk and easier maintenance.
+
+---
+
+### 5.6 AWS CloudFront Configuration
+
+AWS CloudFront is configured as a Content Delivery Network (CDN) to globally cache API Gateway responses. This improves response times and reduces latency for users accessing the API.
+
+````hcl
+resource "aws_cloudfront_distribution" "shortener_cdn" {
+  enabled = true
+  comment = "CloudFront distribution for URL Shortener API"
+
+  origin {
+    domain_name = aws_apigatewayv2_api.shortener_api.api_endpoint
+    origin_id   = "apiGatewayOrigin"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id       = "apiGatewayOrigin"
+    viewer_protocol_policy = "redirect-to-https"
+    allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+    cached_methods         = ["GET", "HEAD"]
+    compress               = true
+    default_ttl            = 60
+    min_ttl                = 0
+    max_ttl                = 3600
+
+    forwarded_values {
+      query_string = true
+      cookies {
+        forward = "none"
+      }
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  tags = {
+    Name        = "ShortenerCloudFront"
+    Environment = "Production"
+  }
+}
+````
+
+---
+
+#### Explanation:
+
+1. **`aws_cloudfront_distribution`**:  
+   - Creates a CloudFront distribution to cache and serve content globally.
+
+2. **`origin`**:  
+   - Configures **API Gateway** as the origin of CloudFront.  
+   - **`domain_name`**: The API Gateway endpoint (automatically fetched from Terraform).  
+   - **`origin_protocol_policy`**: Enforces HTTPS communication between CloudFront and the origin.
+
+3. **`default_cache_behavior`**:  
+   - Defines the caching behavior for CloudFront:  
+     - **`viewer_protocol_policy`**: Redirects HTTP requests to HTTPS.  
+     - **Allowed Methods**: Allows GET, HEAD, and OPTIONS requests.  
+     - **Caching**:  
+       - **`default_ttl`**: Default Time-to-Live for cached content (60 seconds).  
+       - **`min_ttl`**: Minimum Time-to-Live for cache (0 seconds).  
+       - **`max_ttl`**: Maximum cache duration (3600 seconds).
+
+4. **`viewer_certificate`**:  
+   - Uses the default CloudFront SSL certificate to secure connections.
+
+5. **`restrictions`**:  
+   - Configures global access with no geographic restrictions.
+
+6. **Tags**:  
+   - Adds metadata to identify and manage the CloudFront resource.
+
+---
+
+#### Benefits:
+
+1. **Global Content Delivery**:  
+   - CloudFront caches API Gateway responses at edge locations worldwide, reducing latency for users.
+
+2. **Improved Performance**:  
+   - Caching frequently accessed content ensures faster responses and lower load on API Gateway and Lambda.
+
+3. **Security**:  
+   - Enforces HTTPS communication between clients, CloudFront, and the API Gateway.
+
+4. **Cost Efficiency**:  
+   - By reducing the number of direct API Gateway and Lambda requests, CloudFront lowers the operational costs of the application.
+
+5. **Automatic Compression**:  
+   - CloudFront automatically compresses content (e.g., JSON responses), reducing data transfer costs and improving client performance.
+
+6. **Scalability**:  
+   - CloudFront can handle massive amounts of requests with low latency, ensuring the application scales seamlessly under high traffic.
+
+7. **Flexible TTLs**:  
+   - Configurable cache behavior allows fine-tuning of content freshness.
+
+8. **Resiliency**:  
+   - CloudFront serves cached content even if the API Gateway or Lambda backend experiences downtime.
+
+---
+
+By integrating **CloudFront** with API Gateway, the application achieves **global performance improvements**, lower latency, and reduced operational costs, ensuring a fast and reliable user experience.
+
+---
+
+### 5.7 AWS WAF Configuration
+
+AWS Web Application Firewall (WAF) is configured to protect the API Gateway from abuse, including rate limiting and basic security threats. WAF ensures that the application remains resilient to malicious traffic while enforcing request limits.
+
+````hcl
+resource "aws_wafv2_web_acl" "shortener_waf" {
+  name  = "shortener-waf"
   scope = "REGIONAL"
 
   default_action {
@@ -447,675 +1432,280 @@ resource "aws_wafv2_web_acl" "waf_rate_limit" {
     }
   }
 
-  tags = {
-    Name        = "UrlShortenerWAF"
-    Environment = "Production"
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "ShortenerWAFMetrics"
+    sampled_requests_enabled   = true
   }
-}
-```
-
-### 6.6 Secrets Manager
-```hcl
-resource "aws_secretsmanager_secret" "url_shortener_secrets" {
-  name = "url-shortener-secrets"
 
   tags = {
-    Name        = "UrlShortenerSecrets"
+    Name        = "ShortenerWAF"
     Environment = "Production"
   }
 }
 
-resource "aws_secretsmanager_secret_version" "url_shortener_secrets_value" {
-  secret_id     = aws_secretsmanager_secret.url_shortener_secrets.id
-  secret_string = jsonencode({
-    "dbUsername" = "your-username",
-    "dbPassword" = "your-password"
-  })
+resource "aws_wafv2_web_acl_association" "shortener_waf_association" {
+  resource_arn = aws_apigatewayv2_api.shortener_api.arn
+  web_acl_arn  = aws_wafv2_web_acl.shortener_waf.arn
 }
-```
+````
 
-### 6.7 CloudFront
-```hcl
-resource "aws_cloudfront_distribution" "cdn" {
-  enabled = true
+---
 
-  origin {
-    domain_name = aws_apigatewayv2_api.api_gateway.api_endpoint
-    origin_id   = "apiGatewayOrigin"
-  }
+#### Explanation:
 
-  default_cache_behavior {
-    target_origin_id       = "apiGatewayOrigin"
-    viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "POST"]
-    cached_methods         = ["GET"]
-    compress               = true
-  }
+1. **`aws_wafv2_web_acl`**:  
+   - Creates a **Web ACL** for the application with rules to protect API Gateway.
 
-  viewer_certificate {
-    cloudfront_default_certificate = true
-  }
+2. **Default Action**:  
+   - If no rules match, allow all requests by default. Additional rules can be added for stricter security.
+
+3. **`RateLimitRule`**:  
+   - Enforces rate limiting with the following parameters:
+     - **Limit**: Allows a maximum of **2000 requests per 5 minutes** per IP.  
+     - **Action**: Blocks the IP when the limit is exceeded.  
+
+4. **`visibility_config`**:  
+   - Enables CloudWatch metrics and sampled request logs for monitoring the WAF activity.
+
+5. **`aws_wafv2_web_acl_association`**:  
+   - Associates the WAF Web ACL with the API Gateway to enforce the defined rules.
+
+6. **Tags**:  
+   - Metadata for identification and management of the WAF resource.
+
+---
+
+#### Benefits:
+
+1. **Abuse Protection**:  
+   - Rate limiting prevents abuse by limiting the number of requests per IP, mitigating risks such as DDoS attacks.
+
+2. **Security Rules**:  
+   - WAF rules can be extended to block malicious patterns, SQL injections, and other common web vulnerabilities.
+
+3. **Integration with CloudWatch**:  
+   - Logs and metrics provide visibility into traffic patterns and potential threats.
+
+4. **Scalable Protection**:  
+   - AWS WAF automatically scales to protect API Gateway under high traffic loads.
+
+5. **Custom Rules**:  
+   - You can define additional security rules to match the specific needs of the application.
+
+6. **Cost Optimization**:  
+   - By blocking unnecessary or malicious requests early, WAF reduces API Gateway and Lambda invocation costs.
+
+7. **Resilience**:  
+   - WAF ensures the application remains available and performant even during traffic spikes or malicious attacks.
+
+8. **Centralized Security Management**:  
+   - WAF can be managed centrally, providing a uniform security layer across multiple AWS resources.
+
+---
+
+By integrating **AWS WAF** with API Gateway, the application achieves enhanced **security** and **resilience** through rate limiting and traffic filtering, protecting against abuse and ensuring reliable operations.
+
+
+---
+
+### 5.8 Network Configuration
+
+This section defines a **VPC**, its subnets, route tables, security groups, and network ACLs to ensure secure and isolated network communication.
+
+````hcl
+# VPC Configuration
+resource "aws_vpc" "shortener_vpc" {
+  cidr_block = "10.0.0.0/16"
+  enable_dns_support = true
+  enable_dns_hostnames = true
 
   tags = {
-    Name        = "UrlShortenerCDN"
+    Name        = "ShortenerVPC"
     Environment = "Production"
   }
 }
-```
 
-### 6.8 Outputs
-```hcl
-output "api_gateway_endpoint" {
-  description = "API Gateway endpoint"
-  value       = aws_apigatewayv2_api.api_gateway.api_endpoint
+# Subnets (Public and Private)
+resource "aws_subnet" "public_subnet" {
+  vpc_id                  = aws_vpc.shortener_vpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name        = "PublicSubnet"
+    Environment = "Production"
+  }
 }
 
-output "lambda_function_arn" {
-  description = "Lambda function ARN"
-  value       = aws_lambda_function.url_shortener_lambda.arn
+resource "aws_subnet" "private_subnet" {
+  vpc_id                  = aws_vpc.shortener_vpc.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "us-east-1a"
+
+  tags = {
+    Name        = "PrivateSubnet"
+    Environment = "Production"
+  }
 }
 
-output "redis_endpoint" {
-  description = "Redis endpoint"
-  value       = aws_elasticache_cluster.redis_cluster.primary_endpoint_address
+# Internet Gateway for Public Subnet
+resource "aws_internet_gateway" "shortener_igw" {
+  vpc_id = aws_vpc.shortener_vpc.id
+
+  tags = {
+    Name        = "ShortenerIGW"
+    Environment = "Production"
+  }
 }
 
-output "cloudfront_url" {
-  description = "CloudFront distribution URL"
-  value       = aws_cloudfront_distribution.cdn.domain_name
+# Route Table and Association for Public Subnet
+resource "aws_route_table" "public_route_table" {
+  vpc_id = aws_vpc.shortener_vpc.id
+
+  tags = {
+    Name        = "PublicRouteTable"
+    Environment = "Production"
+  }
 }
-```
 
-### 6.9 Terraform File Structure
-```
-terraform/
-│
-├── main.tf                 # Core Terraform resources for Lambda, DynamoDB, API Gateway
-├── redis.tf                # Redis ElastiCache configuration
-├── waf.tf                  # AWS WAF configuration for rate limiting
-├── secrets_manager.tf      # AWS Secrets Manager configuration
-├── cloudfront.tf           # CloudFront for edge caching
-├── outputs.tf              # Outputs of resource endpoints
-├── variables.tf            # Configuration variables for reusability
-├── provider.tf             # AWS provider and Terraform backend configuration
-└── backend.tf              # (Optional) Remote backend configuration
-```
+resource "aws_route" "public_internet_route" {
+  route_table_id         = aws_route_table.public_route_table.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.shortener_igw.id
+}
 
-<br>
+resource "aws_route_table_association" "public_subnet_association" {
+  subnet_id      = aws_subnet.public_subnet.id
+  route_table_id = aws_route_table.public_route_table.id
+}
 
-# Step 7: CI/CD Pipeline (GitHub Actions)
+# Security Group for Lambda and ElastiCache
+resource "aws_security_group" "shortener_sg" {
+  vpc_id = aws_vpc.shortener_vpc.id
+  name   = "ShortenerSecurityGroup"
 
-To automate infrastructure provisioning, deployment of the Lambda function, and API Gateway integration, we use **GitHub Actions** as the CI/CD pipeline.
+  ingress {
+    description = "Allow HTTPS inbound traffic"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
----
+  ingress {
+    description = "Allow Redis connections"
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
 
-### 7.1 GitHub Actions Workflow File
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-Create a `.github/workflows/deploy.yml` file in your project repository:
+  tags = {
+    Name        = "ShortenerSecurityGroup"
+    Environment = "Production"
+  }
+}
 
-```yaml
-name: Deploy to AWS
+# Network ACLs for Public and Private Subnets
+resource "aws_network_acl" "shortener_nacl" {
+  vpc_id = aws_vpc.shortener_vpc.id
+  tags = {
+    Name        = "ShortenerNACL"
+    Environment = "Production"
+  }
+}
 
-on:
-  push:
-    branches: [main]
+resource "aws_network_acl_rule" "allow_https_inbound" {
+  network_acl_id = aws_network_acl.shortener_nacl.id
+  rule_number    = 100
+  protocol       = "tcp"
+  rule_action    = "allow"
+  egress         = false
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 443
+  to_port        = 443
+}
 
-jobs:
-  deploy:
-    name: Deploy Terraform and Lambda
-    runs-on: ubuntu-latest
+resource "aws_network_acl_rule" "allow_redis_inbound" {
+  network_acl_id = aws_network_acl.shortener_nacl.id
+  rule_number    = 110
+  protocol       = "tcp"
+  rule_action    = "allow"
+  egress         = false
+  cidr_block     = "10.0.0.0/16"
+  from_port      = 6379
+  to_port        = 6379
+}
 
-    steps:
-      # Step 1: Checkout Code
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      # Step 2: Set up AWS CLI
-      - name: Configure AWS CLI
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      # Step 3: Set up Terraform
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v2
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ./terraform
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
-        working-directory: ./terraform
-
-      # Step 4: Package and Deploy Lambda
-      - name: Package Lambda Function
-        run: |
-          mkdir -p target
-          mvn clean package
-          cp target/url-shortener.jar ./terraform/url-shortener.jar
-
-      - name: Upload Lambda to S3
-        run: |
-          aws s3 cp ./terraform/url-shortener.jar s3://your-s3-bucket/lambda/url-shortener.jar
-
-      - name: Update Lambda Function
-        run: |
-          aws lambda update-function-code \
-            --function-name url-shortener-lambda \
-            --s3-bucket your-s3-bucket \
-            --s3-key lambda/url-shortener.jar
-
-      # Step 5: Verify Deployment
-      - name: Verify API Deployment
-        run: |
-          echo "Deployment Successful. Access API via: https://your-api-gateway-endpoint"
-```
-
-### 7.2 CI/CD Pipeline Steps Explained
-
-1. **Trigger**:  
-   - Pipeline runs on any **push to the `main` branch**.
-
-2. **Checkout Code**:  
-   - Pulls the latest code from the GitHub repository.
-
-3. **Configure AWS CLI**:  
-   - Sets up AWS credentials using GitHub Secrets (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`).
-
-4. **Terraform Deployment**:  
-   - Initializes (`terraform init`) and applies the infrastructure (`terraform apply`).
-   - Deploys resources like **DynamoDB, Redis, Lambda, WAF, and API Gateway**.
-
-5. **Package Lambda Function**:
-   - Compiles the Spring Boot project into a **JAR** file using Maven.
-
-6. **Upload to S3**:  
-   - Uploads the packaged Lambda JAR file to the specified **S3 bucket**.
-
-7. **Update AWS Lambda Function**:  
-   - Updates the Lambda function code to use the newly uploaded JAR file.
-
-8. **Verify Deployment**:  
-   - Outputs the API Gateway endpoint for accessing the deployed API.
-
-### 7.3 Directory Structure for GitHub Actions
-```
-.github/
-└── workflows/
-    └── deploy.yml    # CI/CD pipeline configuration
-```
-
-### 7.4 Required GitHub Secrets
-
-Ensure the following secrets are configured in your GitHub repository for the CI/CD pipeline to work securely:
-
-1. **AWS_ACCESS_KEY_ID**  
-   - Description: AWS Access Key ID for authenticating with AWS services.  
-   - Example Value: `AKIAIOSFODNN7EXAMPLE`
-
-2. **AWS_SECRET_ACCESS_KEY**  
-   - Description: AWS Secret Access Key for authenticating with AWS services.  
-   - Example Value: `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`
-
-3. **AWS_REGION**  
-   - Description: AWS region where resources will be deployed.  
-   - Example Value: `us-east-1`
-
-4. **S3_BUCKET_NAME**  
-   - Description: Name of the S3 bucket where the Lambda JAR file will be uploaded.  
-   - Example Value: `your-s3-bucket-name`
-
-5. **LAMBDA_FUNCTION_NAME**  
-   - Description: Name of the Lambda function to be updated with the new JAR file.  
-   - Example Value: `url-shortener-lambda`
-
-6. **TERRAFORM_BACKEND_BUCKET** *(Optional)*  
-   - Description: S3 bucket used as the backend for Terraform state files.  
-   - Example Value: `terraform-backend-bucket`
-
-
-### 7.5 Outputs and Monitoring
-
-1. **Logs**  
-   - All deployment logs and pipeline activity are visible in the **GitHub Actions** workflow under the "Actions" tab of your repository.  
-   - Logs include Terraform execution details, Lambda function updates, and S3 upload confirmations.
-
-2. **Verification**  
-   - The pipeline outputs the **API Gateway endpoint** to validate that the application has been deployed successfully.  
-   - Example Output:  
-     ```
-     Deployment Successful. Access API via: https://<api-gateway-endpoint>
-     ```
-
-3. **Monitoring**  
-   - **AWS CloudWatch** automatically captures logs, metrics, and events for the Lambda function.  
-   - Monitor key metrics such as:
-     - **Invocation Count**: Total number of Lambda function executions.
-     - **Execution Duration**: Time taken to execute the Lambda function.
-     - **Error Rate**: Number of failed invocations.
-     - **Throttling**: Count of throttled requests due to rate limits.
-
-4. **Notifications**  
-   - Configure GitHub Actions to notify you via email or Slack when the pipeline succeeds or fails.
-   - Add integration with services like **AWS SNS** or third-party tools like **PagerDuty** for alerts.
-
-5. **Debugging**  
-   - If errors occur during deployment or function execution, CloudWatch logs can be analyzed for detailed stack traces and error messages.
-   - Terraform outputs will include details of any resource creation failures.
-
-### 7.6 Benefits of CI/CD Pipeline
-
-1. **Automation**  
-   - Eliminates manual steps for provisioning infrastructure and deploying code.  
-   - Ensures consistency across environments (e.g., development, staging, production).
-
-2. **Fast Feedback**  
-   - Automatically deploys changes upon a push to the `main` branch.  
-   - Provides immediate feedback about build or deployment failures.
-
-3. **Infrastructure as Code**  
-   - Terraform manages all AWS resources in a version-controlled manner.  
-   - Enables repeatable, consistent, and auditable deployments.
-
-4. **Reliability**  
-   - Ensures the latest code and infrastructure updates are deployed seamlessly.  
-   - Automatically rolls out changes without downtime when properly configured.
-
-5. **Visibility**  
-   - All deployment logs are captured in GitHub Actions workflows.  
-   - Provides insights into each stage of the pipeline, including resource creation, Lambda updates, and S3 uploads.
-
-6. **Security**  
-   - Secrets like `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are securely stored using GitHub Secrets.  
-   - Reduces risk by avoiding manual handling of credentials.
-
-7. **Scalability**  
-   - Supports frequent changes, allowing development teams to scale the project efficiently.  
-   - CloudWatch logs and monitoring ensure application performance at scale.
-
-8. **Notifications and Alerts**  
-   - Integrate with tools like Slack or AWS SNS to receive real-time alerts about deployment successes, failures, or errors.  
+resource "aws_network_acl_rule" "allow_all_outbound" {
+  network_acl_id = aws_network_acl.shortener_nacl.id
+  rule_number    = 200
+  protocol       = "-1"
+  rule_action    = "allow"
+  egress         = true
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 0
+  to_port        = 0
+}
+````
 
 ---
 
-By leveraging GitHub Actions, this CI/CD pipeline ensures **automation, consistency, and reliability** while reducing deployment overhead and enabling rapid iteration.
+### Explanation:
 
-<br>
+1. **VPC**:  
+   - Defines a Virtual Private Cloud with a **`10.0.0.0/16`** CIDR block to isolate resources securely.
 
-# Step 8: Roadmap
+2. **Public and Private Subnets**:  
+   - Public Subnet: For resources requiring internet access, such as API Gateway.  
+   - Private Subnet: For resources like Lambda and ElastiCache.
 
-The roadmap outlines the phases for building, deploying, and enhancing the **URL Shortener Application**. Each phase focuses on incremental improvements to achieve a secure, scalable, and production-ready system.
+3. **Internet Gateway**:  
+   - Connects the public subnet to the internet.
 
----
+4. **Route Table and Route Association**:  
+   - Routes external traffic to the internet gateway for public subnets.
 
-### **Phase 1: Core API Development**
-- Build a REST API to shorten URLs and redirect users.
-- Implement **DynamoDB** for persistent URL storage.
-- Add **Redis** for caching frequently accessed URLs.
-- Expose endpoints:
-  - `POST /shorten` → Accepts long URLs and returns shortened URLs.
-  - `GET /{shortUrl}` → Redirects to the original URL.
+5. **Security Group**:  
+   - Allows inbound HTTPS (443) for API Gateway and Redis access (6379) within the VPC.  
+   - Allows all outbound traffic for communication with external services.
 
----
-
-### **Phase 2: Security Enhancements**
-- Add **Google OAuth2** for user authentication.
-- Protect endpoints to allow only authenticated access.
-- Integrate **AWS Secrets Manager** for secure credential management.
+6. **Network ACLs (NACL)**:  
+   - Adds an additional layer of security to control inbound and outbound traffic for subnets.
 
 ---
 
-### **Phase 3: Infrastructure Deployment**
-- Provision AWS resources using **Terraform**:
-  - API Gateway
-  - Lambda
-  - DynamoDB
-  - Redis (ElastiCache)
-  - CloudFront
-  - WAF
-  - Secrets Manager
-- Manage Terraform state with an S3 backend for consistency.
+### Benefits:
+
+1. **Isolation and Security**:  
+   - Resources are isolated within a VPC, providing enhanced security.
+
+2. **Granular Access Control**:  
+   - Security Groups and Network ACLs allow fine-grained control over traffic.
+
+3. **Public and Private Subnets**:  
+   - Public subnet exposes API Gateway while private subnets keep Lambda and ElastiCache secure.
+
+4. **Scalable and Flexible**:  
+   - AWS VPC supports scaling, enabling the addition of more resources or subnets as needed.
+
+5. **Defense in Depth**:  
+   - Combining Security Groups and Network ACLs provides multiple layers of security.
+
+6. **Cost Efficiency**:  
+   - Resources like ElastiCache can reside in private subnets, minimizing unnecessary exposure.
 
 ---
 
-### **Phase 4: CI/CD Pipeline**
-- Implement a **GitHub Actions** pipeline:
-  - Automate infrastructure provisioning using Terraform.
-  - Package and deploy the Lambda function to AWS.
-  - Upload the application JAR file to S3.
-- Verify deployments and monitor pipeline execution.
+This **network configuration** ensures secure communication and access control for all AWS resources, aligning with best practices for production-ready infrastructure.
 
----
-
-### **Phase 5: Rate Limiting and Security**
-- Integrate **AWS WAF** to protect APIs from abuse:
-  - Apply rate-based rules to limit requests per IP.
-- Use **IAM roles** for least-privilege access to AWS resources.
-- Enable encryption for DynamoDB, Redis, and S3.
-
----
-
-### **Phase 6: Multi-Region High Availability**
-- Deploy **DynamoDB Global Tables** to replicate data across regions.
-- Deploy Lambda functions and API Gateway endpoints in multiple regions.
-- Use **Route 53** to route traffic to the closest regional endpoint.
-
----
-
-### **Phase 7: Monitoring and Observability**
-- Integrate **AWS CloudWatch** for monitoring:
-  - Lambda function logs, errors, and metrics.
-  - API Gateway request logs.
-- Set up CloudWatch alarms for critical issues like throttling, high latency, or errors.
-- Create **CloudWatch dashboards** to visualize application health.
-
----
-
-### **Phase 8: ETL Pipelines and Analytics**
-- Use **AWS Glue** to periodically extract metadata (headers, content) from shortened URLs.
-- Store processed data in **Amazon S3** for long-term storage.
-- Integrate **AWS OpenSearch** to analyze and visualize usage statistics:
-  - Number of shortened URLs.
-  - URL access patterns.
-  - Performance metrics.
-
----
-
-### **Phase 9: Optimization and Scalability**
-- Optimize the Lambda function for performance and cost efficiency.
-- Enable **CloudFront** to cache API responses globally and reduce latency.
-- Use **Auto Scaling** for ElastiCache to handle increased traffic.
-- Conduct load testing to ensure scalability under heavy loads.
-
----
-
-### Roadmap Benefits:
-- Incremental, phased development for easier implementation.
-- Ensures the application evolves to be **secure**, **scalable**, and **highly available**.
-- Provides clear milestones for development, testing, and deployment.
-- Enables future extensions like detailed analytics, real-time monitoring, and advanced caching.
-
-By following this roadmap, the **URL Shortener Application** can progress from a basic proof of concept to a robust, enterprise-grade solution.
-
-<br>
-
-# Step 9: Architecture Diagrams (Application and Infrastructure)
-
-To visually represent the architecture, you can use a tool like **draw.io** to create the following diagrams:
-
----
-
-## 9.1 Application Architecture Diagram
-
-### Components:
-
-1. **Client**  
-   - Represents users interacting with the system via HTTP requests.
-
-2. **API Gateway**  
-   - Acts as the entry point for all incoming requests.
-
-3. **AWS Lambda**  
-   - Processes requests:
-     - `POST /shorten` → Generates and stores shortened URLs.
-     - `GET /{shortUrl}` → Fetches and redirects to the original URL.
-
-4. **Redis (ElastiCache)**  
-   - Caches frequently accessed URLs for faster lookups.
-
-5. **DynamoDB**  
-   - Serves as the persistent database for storing shortened and original URLs.
-
-6. **Secrets Manager**  
-   - Stores and retrieves secure credentials (e.g., DB credentials).
-
-7. **AWS WAF**  
-   - Protects the API Gateway by applying rate limiting and security rules.
-
-8. **CloudFront**  
-   - Globally caches API Gateway responses for faster delivery to users.
-
-### Data Flow:
-
-1. **Client** → Sends HTTP requests to **API Gateway**.
-2. **API Gateway** → Proxies requests to **AWS Lambda**.
-3. **AWS Lambda**:
-   - Checks **Redis** for cached data.
-   - If not found, queries **DynamoDB**.
-   - Returns the response to the client and caches the result in **Redis**.
-4. **Secrets Manager** → Provides secure credentials to AWS Lambda.
-5. **AWS WAF** → Secures API Gateway with rate limits and IP filtering.
-6. **CloudFront** → Caches API responses globally to reduce latency.
-
----
-
-## 9.2 Infrastructure Diagram
-
-### Components:
-
-1. **GitHub Actions**  
-   - CI/CD pipeline for deployment automation.
-
-2. **Terraform**  
-   - Infrastructure as code to provision resources.
-
-3. **AWS Resources**:
-   - **API Gateway** → Manages API endpoints.
-   - **Lambda** → Runs the serverless application.
-   - **DynamoDB** → Persistent database for storing URL mappings.
-   - **Redis (ElastiCache)** → Provides caching for low-latency lookups.
-   - **CloudFront** → Delivers content globally with edge caching.
-   - **WAF** → Adds rate limiting and security rules.
-   - **Secrets Manager** → Stores secure credentials.
-   - **S3** → Stores the Lambda deployment package.
-
-4. **CloudWatch**  
-   - Monitors Lambda function logs, metrics, and alarms.
-
-5. **AWS Glue**  
-   - Periodically processes data (e.g., metadata extraction).
-
-6. **OpenSearch**  
-   - Visualizes analytics and usage statistics.
-
----
-
-### Connections and Flow:
-
-1. **GitHub Actions** → Deploys infrastructure using Terraform and updates Lambda function code.
-
-2. **Terraform** → Provisions all AWS resources:
-   - API Gateway
-   - AWS Lambda
-   - DynamoDB
-   - Redis (ElastiCache)
-   - CloudFront
-   - WAF
-   - Secrets Manager
-   - S3
-   - Glue
-
-3. **Client** → Sends requests to **CloudFront**, which forwards them to **API Gateway**.
-
-4. **API Gateway** → Routes requests to **AWS Lambda**.
-
-5. **AWS Lambda**:
-   - Queries **Redis** for cached URLs.
-   - Falls back to **DynamoDB** for persistent storage if data is not cached.
-   - Updates cache and returns the response.
-
-6. **Secrets Manager** → Provides secure credentials to **AWS Lambda**.
-
-7. **CloudWatch** → Captures logs, metrics, and errors for Lambda and API Gateway.
-
-8. **AWS Glue** → Extracts metadata periodically and stores processed data in **S3**.
-
-9. **OpenSearch** → Visualizes processed metadata and API usage statistics.
-
----
-
-## 9.3 Suggested Diagram Layout in draw.io
-
-### Application Architecture Diagram Layout:
-
-- **Left Side**:
-  - Client → API Gateway → AWS WAF (Layer in front of API Gateway).
-
-- **Middle**:
-  - API Gateway → AWS Lambda.
-
-- **Right Side**:
-  - AWS Lambda → Redis (top) → DynamoDB (bottom).
-
-- **Bottom**:
-  - AWS Secrets Manager → AWS Lambda.
-
-- **Top**:
-  - CloudFront (connecting to API Gateway).
-
----
-
-### Infrastructure Diagram Layout:
-
-- **Top**:
-  - GitHub Actions → Terraform.
-
-- **Middle**:
-  - Terraform → AWS Resources:
-    - API Gateway
-    - AWS Lambda
-    - Redis (ElastiCache)
-    - DynamoDB
-    - CloudFront
-    - WAF
-    - Secrets Manager
-    - S3
-    - AWS Glue.
-
-- **Bottom**:
-  - AWS Glue → S3 → OpenSearch (analytics).
-
-- **Side**:
-  - CloudWatch → AWS Lambda, API Gateway (for monitoring).
-
----
-
-## 9.4 Tools to Create the Diagrams
-
-1. **draw.io (Diagrams.net)**:  
-   - Free and widely used tool to design architecture diagrams.
-   - Website: [https://app.diagrams.net/](https://app.diagrams.net/)
-
-2. **Lucidchart**:  
-   - A more advanced paid tool with templates for AWS architecture.
-
-3. **AWS Architecture Icons**:  
-   - Official AWS icons for designing diagrams:  
-     [https://aws.amazon.com/architecture/icons/](https://aws.amazon.com/architecture/icons/)
-
----
-
-By following these guidelines, you can create clear and professional diagrams for both the **Application Architecture** and **Infrastructure**.
-
-Let me know if you'd like further details or adjustments! 🚀
-
-<br>
-
-# Step 10: Conclusion
-
-The **URL Shortener Application** delivers a secure, scalable, and production-ready solution leveraging modern **Java 21**, **Spring Boot 3**, and AWS cloud services. The design incorporates industry best practices, cloud-native tools, and clean architecture principles to ensure high performance and extensibility.
-
----
-
-### Key Achievements:
-
-1. **Core Functionality**  
-   - RESTful API for shortening and retrieving URLs.
-   - **DynamoDB** for persistent storage and **Redis** for caching to optimize response times.
-
-2. **Security**  
-   - **Google OAuth2** for user authentication.
-   - **AWS WAF** for API protection and rate limiting.
-   - **AWS Secrets Manager** for secure credential management with automatic rotation.
-
-3. **Infrastructure as Code**  
-   - Full infrastructure provisioning using **Terraform**:
-     - API Gateway
-     - Lambda
-     - DynamoDB
-     - Redis
-     - CloudFront
-     - WAF
-     - Secrets Manager
-
-4. **CI/CD Automation**  
-   - Implemented a robust **GitHub Actions pipeline** for automating infrastructure deployment and Lambda code updates.
-
-5. **High Availability and Scalability**  
-   - Multi-region deployments using **DynamoDB Global Tables** and AWS Lambda.  
-   - Global edge caching with **AWS CloudFront**.
-
-6. **Monitoring and Observability**  
-   - **CloudWatch** for logging, monitoring, and alarms.
-   - Centralized dashboards for real-time application performance tracking.
-
-7. **ETL Pipelines and Analytics**  
-   - Automated data processing with **AWS Glue**.
-   - Usage analytics and reporting using **AWS OpenSearch**.
-
----
-
-### Final Architecture Recap:
-
-The final architecture combines the following AWS services:
-
-- **API Gateway** → Routes HTTP requests.
-- **AWS Lambda** → Handles business logic with a serverless approach.
-- **DynamoDB** → Stores URL mappings securely.
-- **Redis (ElastiCache)** → Caches URL lookups for faster responses.
-- **AWS WAF** → Adds rate limiting and API security.
-- **Secrets Manager** → Manages sensitive credentials securely.
-- **CloudFront** → Globally caches API responses for improved latency.
-- **AWS Glue** → Extracts metadata for data analytics.
-- **AWS OpenSearch** → Provides visualized usage insights.
-- **CloudWatch** → Monitors logs, errors, and metrics.
-
----
-
-### Future Enhancements:
-
-1. **Custom User Dashboards**  
-   - Allow users to view statistics and manage their shortened URLs.
-
-2. **Real-Time Analytics**  
-   - Use AWS Kinesis or DynamoDB Streams to process URL access events in real-time.
-
-3. **Advanced Monitoring**  
-   - Integrate AWS X-Ray for detailed tracing and performance insights.
-
-4. **Enhanced ETL Pipelines**  
-   - Automate further metadata extraction and storage for reporting.
-
-5. **Scalability Testing**  
-   - Conduct load testing to identify and optimize bottlenecks under heavy loads.
-
----
-
-### Final Thoughts:
-
-By following this design and roadmap, the **URL Shortener Application** is optimized for:
-
-- **High Performance**: Fast URL lookups with caching and serverless execution.
-- **Security**: End-to-end security with OAuth2, WAF, and Secrets Manager.
-- **Scalability**: Elastic AWS services handle increasing traffic seamlessly.
-- **Maintainability**: CI/CD pipelines and infrastructure as code ensure smooth operations.
-
-This solution can be extended to meet evolving requirements, such as analytics, custom user features, and enhanced security. By leveraging the full power of AWS, the application is ready to scale and serve global users efficiently.
-
----
-
-Congratulations on reaching the conclusion! 🚀  
-Let me know if you'd like to dive deeper into any aspect of the solution or need additional guidance.
